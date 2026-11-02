@@ -10,33 +10,79 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EventsRouteImport } from './routes/events'
+import { Route as ListYourBoatRouteImport } from './routes/list-your-boat'
+import { Route as SearchRouteImport } from './routes/search'
+import { Route as BoatsBoatIdRouteImport } from './routes/boats.$boatId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EventsRoute = EventsRouteImport.update({
+  id: '/events',
+  path: '/events',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ListYourBoatRoute = ListYourBoatRouteImport.update({
+  id: '/list-your-boat',
+  path: '/list-your-boat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SearchRoute = SearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BoatsBoatIdRoute = BoatsBoatIdRouteImport.update({
+  id: '/boats/$boatId',
+  path: '/boats/$boatId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/events': typeof EventsRoute
+  '/list-your-boat': typeof ListYourBoatRoute
+  '/search': typeof SearchRoute
+  '/boats/$boatId': typeof BoatsBoatIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/events': typeof EventsRoute
+  '/list-your-boat': typeof ListYourBoatRoute
+  '/search': typeof SearchRoute
+  '/boats/$boatId': typeof BoatsBoatIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/events': typeof EventsRoute
+  '/list-your-boat': typeof ListYourBoatRoute
+  '/search': typeof SearchRoute
+  '/boats/$boatId': typeof BoatsBoatIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/events' | '/list-your-boat' | '/search' | '/boats/$boatId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/events' | '/list-your-boat' | '/search' | '/boats/$boatId'
+  id:
+    | '__root__'
+    | '/'
+    | '/events'
+    | '/list-your-boat'
+    | '/search'
+    | '/boats/$boatId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  EventsRoute: typeof EventsRoute
+  ListYourBoatRoute: typeof ListYourBoatRoute
+  SearchRoute: typeof SearchRoute
+  BoatsBoatIdRoute: typeof BoatsBoatIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +94,43 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/events': {
+      id: '/events'
+      path: '/events'
+      fullPath: '/events'
+      preLoaderRoute: typeof EventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/list-your-boat': {
+      id: '/list-your-boat'
+      path: '/list-your-boat'
+      fullPath: '/list-your-boat'
+      preLoaderRoute: typeof ListYourBoatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/search': {
+      id: '/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/boats/$boatId': {
+      id: '/boats/$boatId'
+      path: '/boats/$boatId'
+      fullPath: '/boats/$boatId'
+      preLoaderRoute: typeof BoatsBoatIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  EventsRoute: EventsRoute,
+  ListYourBoatRoute: ListYourBoatRoute,
+  SearchRoute: SearchRoute,
+  BoatsBoatIdRoute: BoatsBoatIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

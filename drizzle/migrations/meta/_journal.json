@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1793648027659,
+      "tag": "0000_dinghycharter_core",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793648094523,
+      "tag": "0001_seed_catalog_and_demo_boats",
+      "breakpoints": true
+    }
+  ]
+}
