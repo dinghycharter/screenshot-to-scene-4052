@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as EventsRouteImport } from './routes/events'
 import { Route as ListYourBoatRouteImport } from './routes/list-your-boat'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as AdminCatalogRouteImport } from './routes/admin.catalog'
 import { Route as BoatsBoatIdRouteImport } from './routes/boats.$boatId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -35,6 +36,11 @@ const SearchRoute = SearchRouteImport.update({
   path: '/search',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminCatalogRoute = AdminCatalogRouteImport.update({
+  id: '/admin/catalog',
+  path: '/admin/catalog',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BoatsBoatIdRoute = BoatsBoatIdRouteImport.update({
   id: '/boats/$boatId',
   path: '/boats/$boatId',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/events': typeof EventsRoute
   '/list-your-boat': typeof ListYourBoatRoute
   '/search': typeof SearchRoute
+  '/admin/catalog': typeof AdminCatalogRoute
   '/boats/$boatId': typeof BoatsBoatIdRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/events': typeof EventsRoute
   '/list-your-boat': typeof ListYourBoatRoute
   '/search': typeof SearchRoute
+  '/admin/catalog': typeof AdminCatalogRoute
   '/boats/$boatId': typeof BoatsBoatIdRoute
 }
 export interface FileRoutesById {
@@ -61,19 +69,33 @@ export interface FileRoutesById {
   '/events': typeof EventsRoute
   '/list-your-boat': typeof ListYourBoatRoute
   '/search': typeof SearchRoute
+  '/admin/catalog': typeof AdminCatalogRoute
   '/boats/$boatId': typeof BoatsBoatIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/events' | '/list-your-boat' | '/search' | '/boats/$boatId'
+  fullPaths:
+    | '/'
+    | '/events'
+    | '/list-your-boat'
+    | '/search'
+    | '/admin/catalog'
+    | '/boats/$boatId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/events' | '/list-your-boat' | '/search' | '/boats/$boatId'
+  to:
+    | '/'
+    | '/events'
+    | '/list-your-boat'
+    | '/search'
+    | '/admin/catalog'
+    | '/boats/$boatId'
   id:
     | '__root__'
     | '/'
     | '/events'
     | '/list-your-boat'
     | '/search'
+    | '/admin/catalog'
     | '/boats/$boatId'
   fileRoutesById: FileRoutesById
 }
@@ -82,6 +104,7 @@ export interface RootRouteChildren {
   EventsRoute: typeof EventsRoute
   ListYourBoatRoute: typeof ListYourBoatRoute
   SearchRoute: typeof SearchRoute
+  AdminCatalogRoute: typeof AdminCatalogRoute
   BoatsBoatIdRoute: typeof BoatsBoatIdRoute
 }
 
@@ -115,6 +138,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SearchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/catalog': {
+      id: '/admin/catalog'
+      path: '/admin/catalog'
+      fullPath: '/admin/catalog'
+      preLoaderRoute: typeof AdminCatalogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/boats/$boatId': {
       id: '/boats/$boatId'
       path: '/boats/$boatId'
@@ -130,6 +160,7 @@ const rootRouteChildren: RootRouteChildren = {
   EventsRoute: EventsRoute,
   ListYourBoatRoute: ListYourBoatRoute,
   SearchRoute: SearchRoute,
+  AdminCatalogRoute: AdminCatalogRoute,
   BoatsBoatIdRoute: BoatsBoatIdRoute,
 }
 export const routeTree = rootRouteImport

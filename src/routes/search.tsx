@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { formatPrice } from "@/lib/format";
+import { ClassNameWithLogo } from "@/components/boats/ClassNameWithLogo";
 
 const filterOptionsQuery = queryOptions({ queryKey: ["filter-options"], queryFn: () => getFilterOptions(), staleTime: 1000 * 60 * 10 });
 const searchQuery = (filters: SearchFilters) =>
@@ -161,7 +162,7 @@ function Filters({
           <SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Any class</SelectItem>
-            {options.classes.map((c) => <SelectItem key={c.slug} value={c.slug}>{c.name}</SelectItem>)}
+            {options.classes.map((c) => <SelectItem key={c.slug} value={c.slug}><ClassNameWithLogo name={c.name} slug={c.slug} /></SelectItem>)}
           </SelectContent>
         </Select>
       </div>

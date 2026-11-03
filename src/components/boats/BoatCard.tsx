@@ -3,6 +3,7 @@ import { CalendarDays, MapPin, Star } from "lucide-react";
 import type { BoatCardData } from "@/lib/catalog.functions";
 import { formatDateRange, formatPrice } from "@/lib/format";
 import { SaveButton } from "@/components/boats/SaveButton";
+import { ClassNameWithLogo } from "@/components/boats/ClassNameWithLogo";
 
 export function BoatCard({ boat, index = 0 }: { boat: BoatCardData; index?: number }) {
   const next = boat.availability[0];
@@ -27,7 +28,7 @@ export function BoatCard({ boat, index = 0 }: { boat: BoatCardData; index?: numb
           <div className="grid h-full place-items-center text-sm text-muted-foreground">No photo yet</div>
         )}
         <span className="absolute left-3 top-3 rounded-full bg-background/95 px-2.5 py-1 text-xs font-bold text-navy shadow-soft dark:text-foreground">
-          {boat.className}
+          <ClassNameWithLogo name={boat.className} slug={boat.classSlug} logoClassName="h-3.5 w-6" />
         </span>
         <SaveButton boatId={boat.id} className="absolute right-3 top-3" />
       </div>

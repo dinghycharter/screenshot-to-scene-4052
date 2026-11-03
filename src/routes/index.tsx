@@ -5,6 +5,7 @@ import { ArrowRight, CalendarDays, MapPin, MessageCircle, Search, ShieldCheck, S
 import heroImage from "@/assets/hero-fleet.jpg";
 import { getHomeData } from "@/lib/catalog.functions";
 import { BoatCard } from "@/components/boats/BoatCard";
+import { ClassNameWithLogo } from "@/components/boats/ClassNameWithLogo";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateRange } from "@/lib/format";
@@ -93,7 +94,7 @@ function Hero({ classes }: { classes: HomeData["classes"] }) {
               <SelectContent>
                 <SelectItem value="all">Any class</SelectItem>
                 {classes.map((c) => (
-                  <SelectItem key={c.slug} value={c.slug}>{c.name}</SelectItem>
+                  <SelectItem key={c.slug} value={c.slug}><ClassNameWithLogo name={c.name} slug={c.slug} /></SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -188,7 +189,7 @@ function ClassesSection({ classes }: { classes: HomeData["classes"] }) {
               search={{ class: c.slug }}
               className="group rounded-2xl border border-border bg-card p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-ocean/40 hover:shadow-card"
             >
-              <p className="font-display text-xl font-semibold text-navy transition-colors group-hover:text-ocean dark:text-foreground">{c.name}</p>
+              <p className="font-display text-xl font-semibold text-navy transition-colors group-hover:text-ocean dark:text-foreground"><ClassNameWithLogo name={c.name} slug={c.slug} /></p>
               <p className="mt-1 text-xs text-muted-foreground">{c.category}</p>
               <p className="mt-4 text-xs font-semibold text-foreground">
                 {c.boatCount > 0 ? `${c.boatCount} boat${c.boatCount > 1 ? "s" : ""}` : "Be the first to list"}

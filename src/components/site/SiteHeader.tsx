@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
-import { Heart, LayoutDashboard, LogOut, Menu, MessageCircle, Sailboat, User } from "lucide-react";
+import { Heart, LayoutDashboard, LogOut, Menu, MessageCircle, Sailboat, ShieldCheck, User } from "lucide-react";
 import { Logo } from "@/components/site/Logo";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -106,6 +106,11 @@ export function SiteHeader() {
                 <DropdownMenuItem asChild>
                   <Link to="/dashboard/profile"><User /> Profile</Link>
                 </DropdownMenuItem>
+                {user.app_metadata?.role === "admin" && (
+                  <DropdownMenuItem asChild>
+                    <Link to="/admin/catalog"><ShieldCheck /> Catalog management</Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => void signOut()}>
                   <LogOut /> Sign out
