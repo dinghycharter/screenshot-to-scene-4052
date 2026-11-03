@@ -7,8 +7,14 @@ import { resolveMediaUrls } from "@/lib/media";
 // Public, read-only catalog data for SSR (home, search, boat pages).
 // Uses the publishable key; RLS only exposes public rows.
 function createPublicClient() {
-  const url = process.env["SUPABASE_URL"]!;
-  const key = process.env["SUPABASE_PUBLISHABLE_KEY"]!;
+  // Vercel currently provides the public Supabase config as VITE_* variables.
+  // Keep the unprefixed names as a backwards-compatible option for local/server deployments.
+  const url = process.env["SUPABASE_URL"] || process.env["VITE_SUPABASE_URL"];
+  const key = process.env["SUPABASE_PUBLISHABLE_KEY"] || process.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
+  if (!url || !key) {
+    const missing = [!url && "VITE_SUPABASE_URL", !key && "VITE_SUPABASE_PUBLISHABLE_KEY"].filter(Boolean);
+    throw new Error(`Missing Supabase environment variable(s): ${missing.join(", ")}`);
+  }
   return createClient<Database>(url, key, {
     auth: { persistSession: false, autoRefreshToken: false, storage: undefined },
     global: {

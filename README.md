@@ -1,26 +1,31 @@
-# Screenshot To Scene
+# DinghyCharter
 
-Implement exactly the screenshot and nothing else
+DinghyCharter is a TanStack Start application for finding and booking dinghy charters. It uses Supabase for authentication and data, Vite for development and builds, and Nitro for Vercel deployment.
 
-This project was built with [Lovable](https://lovable.dev).
+## Requirements
 
-**Live app**: https://screenshot-to-scene-4052.lovable.app
+- Node.js 22.12 or later
+- npm
+- A Supabase project
 
-## Build with Lovable
+## Local development
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/182a5a76-42e8-48b1-8eee-6a9971ceee71).
+1. Copy `.env.example` to `.env` and set the Supabase project URL and publishable key.
+2. Install dependencies and start the development server:
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+   ```sh
+   npm install
+   npm run dev
+   ```
 
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+## Build
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+npm run build
 ```
+
+## Vercel environment
+
+Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` for Production, Preview, and Development in the Vercel project settings. These are the Supabase project URL and publishable (formerly anon) key; never use a service role key for either variable.
+
+The `vercel.json` file enables TanStack Start framework detection. Vercel builds the Nitro server and serves the client assets.
