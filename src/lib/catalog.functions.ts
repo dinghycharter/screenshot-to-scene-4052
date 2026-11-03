@@ -3,13 +3,14 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 import { resolveMediaUrls } from "@/lib/media";
+import { normalizeSupabaseUrl } from "@/lib/supabase-url";
 
 // Public, read-only catalog data for SSR (home, search, boat pages).
 // Uses the publishable key; RLS only exposes public rows.
 function createPublicClient() {
   // Vercel currently provides the public Supabase config as VITE_* variables.
   // Keep the unprefixed names as a backwards-compatible option for local/server deployments.
-  const url = import.meta.env["VITE_SUPABASE_URL"] || process.env["SUPABASE_URL"] || process.env["VITE_SUPABASE_URL"];
+  const url = normalizeSupabaseUrl(import.meta.env["VITE_SUPABASE_URL"] || process.env["SUPABASE_URL"] || process.env["VITE_SUPABASE_URL"]);
   const key = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] || process.env["SUPABASE_PUBLISHABLE_KEY"] || process.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
   if (!url || !key) {
     const missing = [!url && "VITE_SUPABASE_URL", !key && "VITE_SUPABASE_PUBLISHABLE_KEY"].filter(Boolean);
