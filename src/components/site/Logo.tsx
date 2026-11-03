@@ -1,20 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
+import logoMark from "@/assets/dinghycharter-logo.png";
 
 export function LogoMark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" aria-hidden className={cn("h-8 w-8", className)}>
-      <rect width="32" height="32" rx="9" className="fill-navy" />
-      <path d="M16.5 6.5 L16.5 21 L24 21 Z" className="fill-ocean" />
-      <path d="M15 9 L15 21 L9 21 Z" className="fill-navy-foreground" />
-      <path
-        d="M7 24.2c1.5 0 1.5-1 3-1s1.5 1 3 1 1.5-1 3-1 1.5 1 3 1 1.5-1 3-1 1.5 1 3 1"
-        fill="none"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        className="stroke-navy-foreground"
-      />
-    </svg>
+    <img src={logoMark} alt="" aria-hidden="true" className={cn("h-8 w-8 rounded-xl object-cover", className)} />
   );
 }
 
