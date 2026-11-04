@@ -369,6 +369,18 @@ export type Database = {
           },
         ]
       }
+      contact_violations: {
+        Row: { id: string; conversation_id: string; user_id: string | null; message_id: string | null; created_at: string }
+        Insert: { id?: string; conversation_id: string; user_id?: string | null; message_id?: string | null; created_at?: string }
+        Update: { id?: string; conversation_id?: string; user_id?: string | null; message_id?: string | null; created_at?: string }
+        Relationships: []
+      }
+      conversation_reopen_requests: {
+        Row: { id: string; violation_id: string; conversation_id: string; requester_id: string; explanation: string; status: "pending" | "approved" | "denied" | "superseded"; admin_note: string | null; reviewed_by: string | null; created_at: string; reviewed_at: string | null }
+        Insert: { id?: string; violation_id: string; conversation_id: string; requester_id: string; explanation: string; status?: "pending" | "approved" | "denied" | "superseded"; admin_note?: string | null; reviewed_by?: string | null; created_at?: string; reviewed_at?: string | null }
+        Update: { id?: string; violation_id?: string; conversation_id?: string; requester_id?: string; explanation?: string; status?: "pending" | "approved" | "denied" | "superseded"; admin_note?: string | null; reviewed_by?: string | null; created_at?: string; reviewed_at?: string | null }
+        Relationships: []
+      }
       events: {
         Row: {
           city: string
@@ -647,6 +659,9 @@ export type Database = {
       }
       owns_boat: { Args: { _boat_id: string }; Returns: boolean }
       redact_contact_info: { Args: { _text: string }; Returns: string }
+      is_site_admin: { Args: Record<PropertyKey, never>; Returns: boolean }
+      request_conversation_reopen: { Args: { _conversation_id: string; _explanation: string }; Returns: string }
+      review_conversation_reopen_request: { Args: { _request_id: string; _decision: string; _admin_note?: string | null }; Returns: undefined }
     }
     Enums: {
       account_type: "owner" | "sailor"

@@ -15,6 +15,7 @@ import { Route as EventsRouteImport } from './routes/events'
 import { Route as ListYourBoatRouteImport } from './routes/list-your-boat'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as AdminCatalogRouteImport } from './routes/admin.catalog'
+import { Route as AdminModerationRouteImport } from './routes/admin.moderation'
 import { Route as BoatsBoatIdRouteImport } from './routes/boats.$boatId'
 import { Route as DashboardMessagesRouteImport } from './routes/dashboard.messages'
 import { Route as DashboardBoatsNewRouteImport } from './routes/dashboard.boats.new'
@@ -49,6 +50,11 @@ const AdminCatalogRoute = AdminCatalogRouteImport.update({
   path: '/admin/catalog',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminModerationRoute = AdminModerationRouteImport.update({
+  id: '/admin/moderation',
+  path: '/admin/moderation',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BoatsBoatIdRoute = BoatsBoatIdRouteImport.update({
   id: '/boats/$boatId',
   path: '/boats/$boatId',
@@ -72,6 +78,7 @@ export interface FileRoutesByFullPath {
   '/list-your-boat': typeof ListYourBoatRoute
   '/search': typeof SearchRoute
   '/admin/catalog': typeof AdminCatalogRoute
+  '/admin/moderation': typeof AdminModerationRoute
   '/boats/$boatId': typeof BoatsBoatIdRoute
   '/dashboard/messages': typeof DashboardMessagesRoute
   '/dashboard/boats/new': typeof DashboardBoatsNewRoute
@@ -108,6 +115,7 @@ export interface FileRouteTypes {
     | '/list-your-boat'
     | '/search'
     | '/admin/catalog'
+    | '/admin/moderation'
     | '/boats/$boatId'
     | '/dashboard/messages'
     | '/dashboard/boats/new'
@@ -142,6 +150,7 @@ export interface RootRouteChildren {
   ListYourBoatRoute: typeof ListYourBoatRoute
   SearchRoute: typeof SearchRoute
   AdminCatalogRoute: typeof AdminCatalogRoute
+  AdminModerationRoute: typeof AdminModerationRoute
   BoatsBoatIdRoute: typeof BoatsBoatIdRoute
   DashboardMessagesRoute: typeof DashboardMessagesRoute
   DashboardBoatsNewRoute: typeof DashboardBoatsNewRoute
@@ -191,7 +200,14 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminCatalogRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/boats/$boatId': {
+    '/admin/moderation': {
+      id: '/admin/moderation'
+      path: '/admin/moderation'
+      fullPath: '/admin/moderation'
+      preLoaderRoute: typeof AdminModerationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/boats/$boatId':
       id: '/boats/$boatId'
       path: '/boats/$boatId'
       fullPath: '/boats/$boatId'
@@ -222,6 +238,7 @@ const rootRouteChildren: RootRouteChildren = {
   ListYourBoatRoute: ListYourBoatRoute,
   SearchRoute: SearchRoute,
   AdminCatalogRoute: AdminCatalogRoute,
+  AdminModerationRoute: AdminModerationRoute,
   BoatsBoatIdRoute: BoatsBoatIdRoute,
   DashboardMessagesRoute: DashboardMessagesRoute,
   DashboardBoatsNewRoute: DashboardBoatsNewRoute,

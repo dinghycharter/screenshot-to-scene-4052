@@ -17,6 +17,7 @@ import { initials } from "@/lib/format";
 type Conversation = Tables<"conversations">;
 type Message = Tables<"messages">;
 type PriceOffer = Tables<"price_offers">;
+type ReopenRequest = Tables<"conversation_reopen_requests">;
 type ConversationPreview = Conversation & {
   boat: Pick<Tables<"boats">, "id" | "title" | "city" | "country" | "daily_price" | "currency" | "price_negotiable"> | null;
   otherPerson: Pick<Tables<"profiles">, "id" | "full_name" | "avatar_url"> | null;
@@ -41,6 +42,7 @@ function MessagesPage() {
   const [draft, setDraft] = useState("");
   const [offerAmount, setOfferAmount] = useState("");
   const [closedConversationId, setClosedConversationId] = useState<string | null>(null);
+  const [reopenExplanation, setReopenExplanation] = useState("");
   const messageListRef = useRef<HTMLDivElement>(null);
 
   const inboxQuery = useQuery({
@@ -130,6 +132,31 @@ function MessagesPage() {
   const priceOffers = offersQuery.data ?? [];
   const pendingOffer = [...priceOffers].reverse().find((offer) => offer.status === "pending") ?? null;
   const conversationClosed = !!activeConversation?.closed_at || closedConversationId === activeId;
+  const reopenQuery = useQuery({
+    queryKey: ["conversation-reopen-requests", activeId ?? "none"],
+    enabled: !!user && !!activeId && !!activeConversation?.closed_at,
+    refetchInterval: 5000,
+    queryFn: async (): Promise<ReopenRequest[]> => {
+      const { data, error } = await supabase.from("conversation_reopen_requests").select("*").eq("conversation_id", activeId!).order("created_at", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const reopenRequests = reopenQuery.data ?? [];
+  const myPendingReopenRequest = reopenRequests.find((request) => request.requester_id === user?.id && request.status === "pending");
+  const requestReopen = useMutation({
+    mutationFn: async () => {
+      if (!activeId) throw new Error("Choose a conversation first.");
+      const { error } = await supabase.rpc("request_conversation_reopen", { _conversation_id: activeId, _explanation: reopenExplanation.trim() });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setReopenExplanation("");
+      if (activeId) void queryClient.invalidateQueries({ queryKey: ["conversation-reopen-requests", activeId] });
+      toast.success("Your explanation was sent to the admin team.");
+    },
+    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : "Could not request a review."),
+  });
   const unreadIds = useMemo(
     () => messages.filter((message) => !message.is_system && message.sender_id && message.sender_id !== user?.id && !message.read_at).map((message) => message.id),
     [messages, user?.id],
@@ -376,7 +403,19 @@ function MessagesPage() {
                 )}
 
                 {conversationClosed ? (
-                  <div className="border-t border-border bg-secondary/60 p-4 text-center text-sm text-muted-foreground">This conversation has been closed. Contact details cannot be shared here.</div>
+                  <div className="space-y-3 border-t border-border bg-secondary/40 p-4 md:px-6">
+                    <p className="text-sm font-medium">This conversation is temporarily closed after contact details were detected.</p>
+                    {activeConversation.close_reason === "contact_sharing" && (myPendingReopenRequest ? (
+                      <p className="rounded-lg bg-background p-3 text-sm text-muted-foreground">Your explanation has been sent. An admin will review the sanitized message and both participants’ explanations.</p>
+                    ) : (
+                      <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); if (reopenExplanation.trim().length >= 10) requestReopen.mutate(); }}>
+                        <label htmlFor="reopenExplanation" className="text-xs font-medium">Ask an admin to review and reopen this chat. The other participant can also send their own explanation.</label>
+                        <Textarea id="reopenExplanation" value={reopenExplanation} onChange={(event) => setReopenExplanation(event.target.value)} maxLength={2000} minLength={10} rows={3} placeholder="Explain what happened (10–2000 characters). Contact details will be removed." disabled={requestReopen.isPending} />
+                        <Button type="submit" size="sm" variant="ocean" disabled={reopenExplanation.trim().length < 10 || requestReopen.isPending}>{requestReopen.isPending && <LoaderCircle className="animate-spin" />} Request admin review</Button>
+                      </form>
+                    ))}
+                    {reopenRequests.some((request) => request.status === "denied") && <p className="text-xs text-muted-foreground">A previous request was declined. You can submit a new explanation for review.</p>}
+                  </div>
                 ) : <form
                   className="border-t border-border bg-card p-4 md:px-6"
                   onSubmit={(event) => {
