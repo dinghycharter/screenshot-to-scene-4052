@@ -44,7 +44,8 @@ function AuthPage() {
         if (error) throw error;
 
         if (data.session) {
-          await navigate({ to: "/" });
+          const target = search.redirect?.startsWith("/") && !search.redirect.startsWith("//") ? search.redirect : "/";
+          window.location.assign(target);
         } else {
           setFeedback({ kind: "success", message: "Account created. Check your email for a confirmation link, then sign in." });
         }
@@ -116,7 +117,7 @@ function AuthPage() {
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
           {isSignup ? "Already have an account?" : "New to DinghyCharter?"}{" "}
-          <Link to="/auth" search={isSignup ? { mode: "signin" } : { mode: "signup" }} className="font-semibold text-ocean hover:underline">
+          <Link to="/auth" search={isSignup ? { mode: "signin", redirect: search.redirect } : { mode: "signup", type: search.type, redirect: search.redirect }} className="font-semibold text-ocean hover:underline">
             {isSignup ? "Sign in" : "Create account"}
           </Link>
         </p>

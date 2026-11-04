@@ -119,6 +119,8 @@ export type Database = {
           created_at: string
           currency: string
           daily_price: number
+          cancellation_policy: string
+          condition: string
           description: string
           equipment: string[]
           id: string
@@ -141,6 +143,8 @@ export type Database = {
           created_at?: string
           currency?: string
           daily_price: number
+          cancellation_policy?: string
+          condition?: string
           description?: string
           equipment?: string[]
           id?: string
@@ -163,6 +167,8 @@ export type Database = {
           created_at?: string
           currency?: string
           daily_price?: number
+          cancellation_policy?: string
+          condition?: string
           description?: string
           equipment?: string[]
           id?: string

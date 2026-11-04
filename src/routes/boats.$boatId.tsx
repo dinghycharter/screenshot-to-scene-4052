@@ -115,6 +115,12 @@ function BoatPage() {
           <section className="py-8">
             <h2 className="text-xl font-semibold">About this boat</h2>
             <p className="mt-3 whitespace-pre-line leading-relaxed text-muted-foreground">{boat.description}</p>
+            <p className="mt-4 text-sm"><span className="font-semibold">Condition:</span> <span className="text-muted-foreground">{boat.condition}</span></p>
+          </section>
+
+          <section className="py-8">
+            <h2 className="text-xl font-semibold">Cancellation policy</h2>
+            <p className="mt-3 whitespace-pre-line leading-relaxed text-muted-foreground">{boat.cancellation_policy}</p>
           </section>
 
           {boat.equipment.length > 0 && (

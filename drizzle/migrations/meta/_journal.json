@@ -15,6 +15,13 @@
       "when": 1793648094523,
       "tag": "0001_seed_catalog_and_demo_boats",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793660000000,
+      "tag": "0002_boat_listing_requirements",
+      "breakpoints": true
     }
   ]
 }

@@ -16,6 +16,8 @@ import { Route as ListYourBoatRouteImport } from './routes/list-your-boat'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as AdminCatalogRouteImport } from './routes/admin.catalog'
 import { Route as BoatsBoatIdRouteImport } from './routes/boats.$boatId'
+import { Route as DashboardMessagesRouteImport } from './routes/dashboard.messages'
+import { Route as DashboardBoatsNewRouteImport } from './routes/dashboard.boats.new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -52,6 +54,16 @@ const BoatsBoatIdRoute = BoatsBoatIdRouteImport.update({
   path: '/boats/$boatId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardMessagesRoute = DashboardMessagesRouteImport.update({
+  id: '/dashboard/messages',
+  path: '/dashboard/messages',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardBoatsNewRoute = DashboardBoatsNewRouteImport.update({
+  id: '/dashboard/boats/new',
+  path: '/dashboard/boats/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -61,6 +73,8 @@ export interface FileRoutesByFullPath {
   '/search': typeof SearchRoute
   '/admin/catalog': typeof AdminCatalogRoute
   '/boats/$boatId': typeof BoatsBoatIdRoute
+  '/dashboard/messages': typeof DashboardMessagesRoute
+  '/dashboard/boats/new': typeof DashboardBoatsNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +84,8 @@ export interface FileRoutesByTo {
   '/search': typeof SearchRoute
   '/admin/catalog': typeof AdminCatalogRoute
   '/boats/$boatId': typeof BoatsBoatIdRoute
+  '/dashboard/messages': typeof DashboardMessagesRoute
+  '/dashboard/boats/new': typeof DashboardBoatsNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +96,8 @@ export interface FileRoutesById {
   '/search': typeof SearchRoute
   '/admin/catalog': typeof AdminCatalogRoute
   '/boats/$boatId': typeof BoatsBoatIdRoute
+  '/dashboard/messages': typeof DashboardMessagesRoute
+  '/dashboard/boats/new': typeof DashboardBoatsNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +109,8 @@ export interface FileRouteTypes {
     | '/search'
     | '/admin/catalog'
     | '/boats/$boatId'
+    | '/dashboard/messages'
+    | '/dashboard/boats/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,6 +120,8 @@ export interface FileRouteTypes {
     | '/search'
     | '/admin/catalog'
     | '/boats/$boatId'
+    | '/dashboard/messages'
+    | '/dashboard/boats/new'
   id:
     | '__root__'
     | '/'
@@ -109,6 +131,8 @@ export interface FileRouteTypes {
     | '/search'
     | '/admin/catalog'
     | '/boats/$boatId'
+    | '/dashboard/messages'
+    | '/dashboard/boats/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -119,6 +143,8 @@ export interface RootRouteChildren {
   SearchRoute: typeof SearchRoute
   AdminCatalogRoute: typeof AdminCatalogRoute
   BoatsBoatIdRoute: typeof BoatsBoatIdRoute
+  DashboardMessagesRoute: typeof DashboardMessagesRoute
+  DashboardBoatsNewRoute: typeof DashboardBoatsNewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -172,6 +198,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BoatsBoatIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/messages': {
+      id: '/dashboard/messages'
+      path: '/dashboard/messages'
+      fullPath: '/dashboard/messages'
+      preLoaderRoute: typeof DashboardMessagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/boats/new': {
+      id: '/dashboard/boats/new'
+      path: '/dashboard/boats/new'
+      fullPath: '/dashboard/boats/new'
+      preLoaderRoute: typeof DashboardBoatsNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -183,6 +223,8 @@ const rootRouteChildren: RootRouteChildren = {
   SearchRoute: SearchRoute,
   AdminCatalogRoute: AdminCatalogRoute,
   BoatsBoatIdRoute: BoatsBoatIdRoute,
+  DashboardMessagesRoute: DashboardMessagesRoute,
+  DashboardBoatsNewRoute: DashboardBoatsNewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

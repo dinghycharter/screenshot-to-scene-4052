@@ -1,19 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { ArrowRight, CalendarDays, MapPin } from "lucide-react";
-import { getFilterOptions } from "@/lib/catalog.functions";
-import { formatDateRange } from "@/lib/format";
-
-const optionsQuery = queryOptions({ queryKey: ["filter-options"], queryFn: () => getFilterOptions(), staleTime: 1000 * 60 * 10 });
+import { eventCatalog, classLogos } from "@/lib/event-catalog";
 
 export const Route = createFileRoute("/events")({
-  loader: ({ context }) => context.queryClient.ensureQueryData(optionsQuery),
   head: () => ({
     meta: [
       { title: "Regattas & events — Charter a dinghy | DinghyCharter" },
-      { name: "description", content: "Charter boats for Trofeo Princesa Sofia, French Olympic Week, Kiel Week, Lake Garda Meeting and world championships." },
+      { name: "description", content: "Browse the regattas and championships available for dinghy charter in 2027." },
       { property: "og:title", content: "Regattas & events — DinghyCharter" },
-      { property: "og:description", content: "Find charter dinghies for the biggest regattas and world championships." },
+      { property: "og:description", content: "Find charter dinghies for regattas and world championships." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -22,32 +17,45 @@ export const Route = createFileRoute("/events")({
 });
 
 function EventsPage() {
-  const { data } = useSuspenseQuery(optionsQuery);
   return (
     <div className="container-page py-12 md:py-16">
-      <p className="text-sm font-semibold text-ocean">Regattas & events</p>
-      <h1 className="mt-2 max-w-2xl text-4xl font-semibold md:text-5xl">Charter a boat for the events that matter</h1>
-      <p className="mt-4 max-w-xl text-muted-foreground">Fly in, pick up a race-ready boat at the venue and focus on racing.</p>
+      <p className="text-sm font-semibold text-ocean">Events for 2027</p>
+      <h1 className="mt-2 max-w-2xl text-4xl font-semibold md:text-5xl">Find a boat for your next regatta</h1>
+      <p className="mt-4 max-w-xl text-muted-foreground">Browse the events currently on our calendar. Dates marked as to be confirmed are provisional.</p>
 
-      <div className="mt-12 divide-y divide-border rounded-3xl border border-border">
-        {data.events.map((ev) => (
-          <Link
-            key={ev.id}
-            to="/search"
-            search={{ event: ev.slug }}
-            className="group flex flex-col gap-3 p-6 transition-colors hover:bg-surface sm:flex-row sm:items-center sm:justify-between md:p-8"
-          >
-            <div>
-              <h2 className="text-xl font-semibold transition-colors group-hover:text-ocean md:text-2xl">{ev.name}</h2>
-              <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1.5"><CalendarDays className="h-4 w-4" />{formatDateRange(ev.start_date, ev.end_date)}</span>
-                <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" />{ev.city}, {ev.country}</span>
-              </div>
+      <div className="mt-10 grid gap-5 md:grid-cols-2">
+        {eventCatalog.map((event) => (
+          <article key={event.slug} className="overflow-hidden rounded-3xl border border-border bg-card shadow-soft">
+            <div className="flex min-h-36 items-center justify-center border-b border-border bg-surface p-6">
+              {event.logo ? (
+                <img src={event.logo} alt={`${event.name} logo`} className="max-h-28 max-w-full object-contain" loading="lazy" />
+              ) : (
+                <div className="text-center font-display text-2xl font-bold tracking-tight text-navy dark:text-foreground">
+                  {event.slug === "kiel-week" ? <><span className="text-ocean">KIELER</span> WOCHE</> : event.name}
+                </div>
+              )}
             </div>
-            <span className="inline-flex items-center gap-1 text-sm font-semibold text-ocean">
-              See boats <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-            </span>
-          </Link>
+            <div className="p-6">
+              <h2 className="text-xl font-semibold md:text-2xl">{event.name}</h2>
+              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1.5"><CalendarDays className="h-4 w-4" />{event.dateLabel}</span>
+                <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" />{event.city}{event.country !== "—" ? `, ${event.country}` : ""}</span>
+              </div>
+              <div className="mt-5 flex flex-wrap items-center gap-3" aria-label={`Classes at ${event.name}`}>
+                {event.classes.map((name) => {
+                  const logo = classLogos[name];
+                  return (
+                    <span key={name} title={name} className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-border bg-background px-2" aria-label={name}>
+                      {logo ? <img src={logo} alt={name} className="h-6 max-w-12 object-contain" loading="lazy" /> : <span className="text-[10px] font-bold text-muted-foreground">{name}</span>}
+                    </span>
+                  );
+                })}
+              </div>
+              <Link to="/search" search={{ event: event.slug }} className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-ocean hover:underline">
+                Find boats for this event <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </article>
         ))}
       </div>
     </div>

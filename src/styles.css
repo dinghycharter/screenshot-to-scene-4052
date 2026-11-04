@@ -137,9 +137,9 @@
   --elev-lift: 0 2px 4px oklch(0.216 0.047 256 / 0.04), 0 24px 48px -16px oklch(0.303 0.087 255.9 / 0.22);
   --gradient-hero: linear-gradient(
     180deg,
-    oklch(0.216 0.047 256 / 0.15) 0%,
-    oklch(0.216 0.047 256 / 0.05) 40%,
-    oklch(0.216 0.047 256 / 0.55) 100%
+    oklch(0.216 0.047 256 / 0.4) 0%,
+    oklch(0.216 0.047 256 / 0.2) 40%,
+    oklch(0.216 0.047 256 / 0.65) 100%
   );
   --gradient-navy: linear-gradient(135deg, oklch(0.303 0.087 255.9), oklch(0.4 0.12 253));
 

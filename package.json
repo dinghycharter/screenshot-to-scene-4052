@@ -11,7 +11,10 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "supabase:start": "supabase start",
+    "supabase:reset": "supabase db reset",
+    "supabase:stop": "supabase stop"
   },
   "overrides": {
     "rolldown": "1.2.1"
@@ -90,6 +93,7 @@
     "nitro": "3.0.260603-beta",
     "postgres": "^4.0.0",
     "prettier": "^3.7.3",
+    "supabase": "^3.0.0",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
     "vite": "8.1.5",

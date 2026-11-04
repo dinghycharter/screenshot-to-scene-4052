@@ -1,1 +1,5 @@
-project_id = "pepgnoelmkyhwidvbfio"
+project_id = "dinghycharter-local"
+
+[auth.email]
+enabled = true
+enable_confirmations = false

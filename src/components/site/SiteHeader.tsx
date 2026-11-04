@@ -142,6 +142,7 @@ export function SiteHeader() {
                 <Link to="/search" className="rounded-lg px-3 py-3 font-medium hover:bg-secondary">Find a boat</Link>
                 <Link to="/events" className="rounded-lg px-3 py-3 font-medium hover:bg-secondary">Events</Link>
                 <Link to="/list-your-boat" className="rounded-lg px-3 py-3 font-medium hover:bg-secondary">List your boat</Link>
+                {user && <Link to="/dashboard/messages" className="flex items-center gap-2 rounded-lg px-3 py-3 font-medium hover:bg-secondary"><MessageCircle className="h-4 w-4" /> Messages</Link>}
                 {!user && (
                   <div className="mt-4 grid gap-2">
                     <Button asChild variant="outline"><Link to="/auth">Sign in</Link></Button>

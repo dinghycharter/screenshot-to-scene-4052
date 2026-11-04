@@ -1,13 +1,17 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { format } from "date-fns";
+import type { DateRange } from "react-day-picker";
 import { ArrowRight, CalendarDays, MapPin, MessageCircle, Search, ShieldCheck, Star } from "lucide-react";
-import heroImage from "@/assets/hero-fleet.jpg";
+import heroImage from "@/assets/hero-regatta.jpg";
 import { getHomeData } from "@/lib/catalog.functions";
 import { BoatCard } from "@/components/boats/BoatCard";
 import { ClassNameWithLogo } from "@/components/boats/ClassNameWithLogo";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatDateRange } from "@/lib/format";
 
 const homeQuery = queryOptions({ queryKey: ["home"], queryFn: () => getHomeData() });
@@ -50,14 +54,15 @@ function Hero({ classes }: { classes: HomeData["classes"] }) {
   const navigate = useNavigate();
   const [cls, setCls] = useState<string>("");
   const [location, setLocation] = useState("");
+  const [dates, setDates] = useState<DateRange>();
 
   return (
     <section className="relative isolate flex min-h-[640px] items-end overflow-hidden md:min-h-[760px]">
       <img
         src={heroImage}
-        alt="A fleet of single-handed dinghies racing upwind on a deep blue sea"
-        width={1920}
-        height={1088}
+        alt="ILCA dinghies racing during the Paris 2024 Olympic sailing events in Marseille"
+        width={1280}
+        height={850}
         className="absolute inset-0 -z-20 h-full w-full object-cover"
         fetchPriority="high"
       />
@@ -80,10 +85,10 @@ function Hero({ classes }: { classes: HomeData["classes"] }) {
             e.preventDefault();
             navigate({
               to: "/search",
-              search: { class: cls || undefined, location: location.trim() || undefined },
+              search: { class: cls || undefined, location: location.trim() || undefined, from: dates?.from ? format(dates.from, "yyyy-MM-dd") : undefined, to: dates?.to ? format(dates.to, "yyyy-MM-dd") : undefined },
             });
           }}
-          className="mt-9 grid max-w-3xl animate-fade-up gap-2 rounded-2xl bg-background p-2 shadow-lift [animation-delay:120ms] sm:grid-cols-[1fr_1fr_auto]"
+          className="mt-9 grid max-w-5xl animate-fade-up gap-2 rounded-2xl bg-background p-2 shadow-lift [animation-delay:120ms] sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto]"
         >
           <label className="flex flex-col rounded-xl px-4 py-2 transition-colors hover:bg-secondary">
             <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">Boat class</span>
@@ -108,6 +113,21 @@ function Hero({ classes }: { classes: HomeData["classes"] }) {
               className="h-7 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
             />
           </label>
+          <div className="flex flex-col rounded-xl px-4 py-2 transition-colors hover:bg-secondary sm:border-l sm:border-border">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">Dates</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" className="flex h-7 items-center gap-2 text-left text-[15px] text-muted-foreground">
+                  <CalendarDays className="h-4 w-4" />
+                  {dates?.from ? `${format(dates.from, "d MMM")}${dates.to ? ` – ${format(dates.to, "d MMM")}` : ""}` : "Any dates"}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar mode="range" selected={dates} onSelect={setDates} disabled={{ before: new Date() }} />
+                {dates && <div className="border-t border-border p-2"><button type="button" className="w-full rounded-md px-3 py-2 text-sm hover:bg-secondary" onClick={() => setDates(undefined)}>Clear dates</button></div>}
+              </PopoverContent>
+            </Popover>
+          </div>
           <Button type="submit" variant="ocean" size="xl" className="h-auto min-h-14 rounded-xl">
             <Search /> Search boats
           </Button>
@@ -120,6 +140,10 @@ function Hero({ classes }: { classes: HomeData["classes"] }) {
           <span className="text-sm text-background/75">Earn from your boat when you're not racing it.</span>
         </div>
       </div>
+      <p className="absolute bottom-2 right-4 z-10 text-[10px] text-background/75 drop-shadow">
+        Photo: <a href="https://commons.wikimedia.org/wiki/File:SAILING_JO_PARIS_2024_MARSEILLE_MARINA_ILCA_7.jpg" target="_blank" rel="noreferrer" className="underline underline-offset-2">Eric Salard / Wikimedia Commons</a>
+        {" · "}<a href="https://creativecommons.org/licenses/by-sa/2.0/" target="_blank" rel="noreferrer" className="underline underline-offset-2">CC BY-SA 2.0</a>
+      </p>
     </section>
   );
 }
@@ -137,19 +161,15 @@ function SectionHeading({ eyebrow, title, action }: { eyebrow: string; title: st
 }
 
 function EventsSection({ events }: { events: HomeData["events"] }) {
+  const featuredEvents = events.slice(0, 3);
   return (
     <section className="container-page py-20 md:py-28">
       <SectionHeading
         eyebrow="Popular events"
         title="Charter for the regattas that matter"
-        action={
-          <Link to="/events" className="hidden items-center gap-1 text-sm font-semibold text-foreground hover:text-ocean sm:flex">
-            All events <ArrowRight className="h-4 w-4" />
-          </Link>
-        }
       />
       <div className="-mx-5 mt-10 flex snap-x gap-4 overflow-x-auto px-5 pb-4 md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0 lg:grid-cols-4">
-        {events.map((ev, i) => (
+        {featuredEvents.map((ev, i) => (
           <Link
             key={ev.id}
             to="/search"
@@ -162,7 +182,7 @@ function EventsSection({ events }: { events: HomeData["events"] }) {
               <p className={`text-xs font-bold uppercase tracking-wider ${i === 0 ? "text-navy-foreground/70" : "text-ocean"}`}>
                 {formatDateRange(ev.start_date, ev.end_date)}
               </p>
-              <h3 className={`mt-3 font-semibold ${i === 0 ? "text-3xl md:text-4xl" : "text-xl"}`}>{ev.name}</h3>
+              <h3 className={`mt-3 font-semibold ${i === 0 ? "text-3xl md:text-4xl" : "text-xl"}`}>{ev.slug === "trofeo-princesa-sofia" ? "Trofeo Princesa Sofía Mallorca by FERGUS Hotels" : ev.slug === "french-olympic-week" ? "Semaine Olympique Française – Hyères TPM" : ev.slug === "kiel-week" ? "Kieler Woche" : ev.name}</h3>
               {i === 0 && ev.description && <p className="mt-3 max-w-sm text-navy-foreground/80">{ev.description}</p>}
             </div>
             <div className={`mt-10 flex items-center justify-between text-sm ${i === 0 ? "text-navy-foreground/80" : "text-muted-foreground"}`}>
@@ -172,6 +192,7 @@ function EventsSection({ events }: { events: HomeData["events"] }) {
           </Link>
         ))}
       </div>
+      <div className="mt-6 flex justify-center md:justify-end"><Button asChild variant="outline"><Link to="/events">Other events <ArrowRight /></Link></Button></div>
     </section>
   );
 }
