@@ -107,9 +107,14 @@ export function SiteHeader() {
                   <Link to="/dashboard/profile"><User /> Profile</Link>
                 </DropdownMenuItem>
                 {user.app_metadata?.role === "admin" && (
-                  <DropdownMenuItem asChild>
-                    <Link to="/admin/catalog"><ShieldCheck /> Catalog management</Link>
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem asChild>
+                      <Link to="/admin/catalog"><ShieldCheck /> Catalog management</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/admin/moderation"><ShieldCheck /> Conversation moderation</Link>
+                    </DropdownMenuItem>
+                  </>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => void signOut()}>
@@ -143,6 +148,7 @@ export function SiteHeader() {
                 <Link to="/events" className="rounded-lg px-3 py-3 font-medium hover:bg-secondary">Events</Link>
                 <Link to="/list-your-boat" className="rounded-lg px-3 py-3 font-medium hover:bg-secondary">List your boat</Link>
                 {user && <Link to="/dashboard/messages" className="flex items-center gap-2 rounded-lg px-3 py-3 font-medium hover:bg-secondary"><MessageCircle className="h-4 w-4" /> Messages</Link>}
+                {user?.app_metadata?.role === "admin" && <Link to="/admin/moderation" className="flex items-center gap-2 rounded-lg px-3 py-3 font-medium hover:bg-secondary"><ShieldCheck className="h-4 w-4" /> Conversation moderation</Link>}
                 {!user && (
                   <div className="mt-4 grid gap-2">
                     <Button asChild variant="outline"><Link to="/auth">Sign in</Link></Button>
