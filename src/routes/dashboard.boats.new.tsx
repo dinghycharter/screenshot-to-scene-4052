@@ -38,6 +38,7 @@ function NewBoatPage() {
   const [classId, setClassId] = useState("");
   const [eventId, setEventId] = useState("");
   const [condition, setCondition] = useState<(typeof conditions)[number] | "">("");
+  const [priceNegotiable, setPriceNegotiable] = useState(false);
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
   const [venue, setVenue] = useState("");
@@ -112,6 +113,7 @@ function NewBoatPage() {
         country: country.trim(),
         pickup_location: venue.trim(),
         daily_price: Number((form.elements.namedItem("dailyPrice") as HTMLInputElement).value),
+        price_negotiable: priceNegotiable,
         security_deposit: Number((form.elements.namedItem("deposit") as HTMLInputElement).value),
         condition,
         cancellation_policy: (form.elements.namedItem("cancellationPolicy") as HTMLTextAreaElement).value.trim(),
@@ -182,6 +184,7 @@ function NewBoatPage() {
           <h2 className="text-xl font-semibold md:col-span-2">Availability and price</h2>
           <div className="grid gap-2 md:col-span-2"><Label>Available dates *</Label><Popover><PopoverTrigger asChild><Button type="button" variant="outline" className="justify-start font-normal"><CalendarDays className="mr-2 h-4 w-4" />{dateRange?.from ? [format(dateRange.from, "d MMM yyyy"), dateRange.to ? format(dateRange.to, "d MMM yyyy") : "Select end date"].join(" – ") : "Choose date range"}</Button></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="range" selected={dateRange} onSelect={setDateRange} disabled={{ before: new Date() }} numberOfMonths={2} /></PopoverContent></Popover></div>
           <div className="grid gap-2"><Label htmlFor="dailyPrice">Price per day (€) *</Label><Input id="dailyPrice" name="dailyPrice" type="number" min="0.01" step="0.01" required placeholder="65.00" /></div>
+          <label className="flex items-start gap-3 rounded-xl border border-border p-4 text-sm md:col-span-2"><input type="checkbox" checked={priceNegotiable} onChange={(event) => setPriceNegotiable(event.currentTarget.checked)} className="mt-1 h-4 w-4 accent-primary" /><span><span className="font-medium">Price is negotiable</span><span className="mt-1 block text-muted-foreground">Sailors can send price offers in the chat. You can accept, decline or counter.</span></span></label>
           <div className="grid gap-2"><Label htmlFor="deposit">Refundable security deposit (€) *</Label><Input id="deposit" name="deposit" type="number" min="0" step="0.01" required placeholder="500.00" /></div>
         </section>
 

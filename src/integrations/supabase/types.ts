@@ -119,6 +119,7 @@ export type Database = {
           created_at: string
           currency: string
           daily_price: number
+          price_negotiable: boolean
           cancellation_policy: string
           condition: string
           description: string
@@ -143,6 +144,7 @@ export type Database = {
           created_at?: string
           currency?: string
           daily_price: number
+          price_negotiable?: boolean
           cancellation_policy?: string
           condition?: string
           description?: string
@@ -167,6 +169,7 @@ export type Database = {
           created_at?: string
           currency?: string
           daily_price?: number
+          price_negotiable?: boolean
           cancellation_policy?: string
           condition?: string
           description?: string
@@ -314,6 +317,8 @@ export type Database = {
       conversations: {
         Row: {
           boat_id: string
+          closed_at: string | null
+          close_reason: string | null
           created_at: string
           id: string
           last_message_at: string
@@ -322,6 +327,8 @@ export type Database = {
         }
         Insert: {
           boat_id: string
+          closed_at?: string | null
+          close_reason?: string | null
           created_at?: string
           id?: string
           last_message_at?: string
@@ -330,6 +337,8 @@ export type Database = {
         }
         Update: {
           boat_id?: string
+          closed_at?: string | null
+          close_reason?: string | null
           created_at?: string
           id?: string
           last_message_at?: string
@@ -440,6 +449,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      price_offers: {
+        Row: {
+          amount: number
+          conversation_id: string
+          created_at: string
+          id: string
+          sender_id: string
+          status: "pending" | "accepted" | "declined" | "countered"
+        }
+        Insert: {
+          amount: number
+          conversation_id: string
+          created_at?: string
+          id?: string
+          sender_id: string
+          status?: "pending" | "accepted" | "declined" | "countered"
+        }
+        Update: {
+          amount?: number
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          sender_id?: string
+          status?: "pending" | "accepted" | "declined" | "countered"
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
