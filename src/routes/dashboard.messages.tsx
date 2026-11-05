@@ -398,7 +398,10 @@ function MessagesPage() {
                       })}
                     </div>
                     {!conversationClosed && !priceOffers.some((offer) => offer.status === "accepted") && (pendingOffer?.sender_id === user.id ? <p className="mt-3 text-xs text-muted-foreground">Your offer is waiting for the other person to respond.</p> : <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); if (offerAmount) submitOffer.mutate(pendingOffer ? { counterOfferId: pendingOffer.id } : {}); }}><div className="min-w-40 flex-1 space-y-1.5"><label htmlFor="offerAmount" className="text-xs font-medium">{pendingOffer ? "Counter offer per day" : "Your offer per day"}</label><Input id="offerAmount" type="number" min="0.01" step="0.01" required value={offerAmount} onChange={(event) => setOfferAmount(event.currentTarget.value)} placeholder={String(activeConversation.boat.daily_price)} disabled={submitOffer.isPending} /></div><Button type="submit" variant="ocean" disabled={!offerAmount || submitOffer.isPending || respondToOffer.isPending}>{submitOffer.isPending ? <LoaderCircle className="animate-spin" /> : null}{pendingOffer ? "Counter offer" : "Send offer"}</Button></form>)}
-                    {priceOffers.some((offer) => offer.status === "accepted") && <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">Price agreed at {formatPrice(Number(priceOffers.find((offer) => offer.status === "accepted")!.amount), activeConversation.boat?.currency ?? "EUR")} per day.</p>}
+                    {priceOffers.some((offer) => offer.status === "accepted") && (() => {
+                      const acceptedOffer = priceOffers.find((offer) => offer.status === "accepted")!;
+                      return <div className="mt-3 space-y-2"><p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">Price agreed at {formatPrice(Number(acceptedOffer.amount), activeConversation.boat?.currency ?? "EUR")} per day.</p>{user.id === activeConversation.sailor_id && <Button asChild size="sm" variant="ocean"><Link to="/checkout" search={{ offer: acceptedOffer.id }}>Review checkout</Link></Button>}</div>;
+                    })()}
                   </div>
                 )}
 
@@ -468,3 +471,5 @@ function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void
 function formatPrice(amount: number, currency: string) {
   return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "EUR" }).format(amount);
 }
+
+
