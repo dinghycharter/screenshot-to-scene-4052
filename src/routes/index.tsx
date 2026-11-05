@@ -19,13 +19,13 @@ const homeQuery = queryOptions({ queryKey: ["home"], queryFn: () => getHomeData(
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "DinghyCharter — Find the perfect charter boat for your next regatta" },
+      { title: "List your boat or find one for your next regatta | DinghyCharter" },
       {
         name: "description",
-        content: "The global marketplace for dinghy charter boats. Charter ILCA, 420, 470, 49er, Nacra 17 and Optimist boats at regattas and training camps worldwide.",
+        content: "Find and charter dinghies for your next regatta, or list your boat to earn when you're not racing.",
       },
-      { property: "og:title", content: "DinghyCharter — Find the perfect charter boat for your next regatta" },
-      { property: "og:description", content: "The global marketplace for dinghy charter boats." },
+      { property: "og:title", content: "List your boat or find one for your next regatta | DinghyCharter" },
+      { property: "og:description", content: "Find and charter dinghies for your next regatta, or list your boat to earn when you're not racing." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
