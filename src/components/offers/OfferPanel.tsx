@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { countCharterDays } from "@/lib/booking";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -32,7 +33,7 @@ type Props = {
 };
 
 type Confirm =
-  | { kind: "send"; amount: number; counterOfferId?: string }
+  | { kind: "send"; amount: number; startDate: string; endDate: string; counterOfferId?: string }
   | { kind: "accept"; offer: PriceOffer }
   | { kind: "cancel"; offer: PriceOffer };
 
@@ -49,6 +50,8 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [amountInput, setAmountInput] = useState("");
+  const [startInput, setStartInput] = useState("");
+  const [endInput, setEndInput] = useState("");
   const [confirm, setConfirm] = useState<Confirm | null>(null);
 
   const isOwner = user?.id === ownerId;
@@ -72,26 +75,44 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
   const paid = hasPaidOffer(offers);
   const waitingOnOther = pendingOffer?.sender_id === user?.id;
   const canCounter = isOwner || boat.price_negotiable;
+  const today = format(new Date(), "yyyy-MM-dd");
+  // The owner answering a buyer's offer keeps the buyer's dates; otherwise dates are chosen here.
+  const lockedDates = pendingOffer?.start_date && pendingOffer.end_date && isOwner ? { start: pendingOffer.start_date, end: pendingOffer.end_date } : null;
+  const formStart = lockedDates?.start ?? (startInput || pendingOffer?.start_date || "");
+  const formEnd = lockedDates?.end ?? (endInput || (startInput ? "" : pendingOffer?.end_date) || "");
+  const formDays = formStart && formEnd ? countCharterDays(formStart, formEnd) : 0;
+  const datesValid = formDays > 0 && formStart >= today;
+  const dateLabel = (offer: PriceOffer) => (offer.start_date && offer.end_date ? `${format(parseISO(offer.start_date), "d MMM")} – ${format(parseISO(offer.end_date), "d MMM yyyy")}` : null);
+
+  const onStartChange = (value: string) => {
+    setStartInput(value);
+    if (endInput && value > endInput) setEndInput("");
+  };
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: priceOffersKey(conversationId) });
   };
 
   const sendOffer = useMutation({
-    mutationFn: async ({ amount, counterOfferId }: { amount: number; counterOfferId?: string }) => {
+    mutationFn: async ({ amount, startDate, endDate, counterOfferId }: { amount: number; startDate: string; endDate: string; counterOfferId?: string }) => {
       if (!user) throw new Error("Sign in to send a price.");
       if (closed) throw new Error("This conversation has been closed.");
       if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a valid daily price.");
+      if (!startDate || !endDate) throw new Error("Choose the charter dates.");
+      if (endDate < startDate) throw new Error("The return date must be on or after the pick-up date.");
+      if (startDate < today) throw new Error("The pick-up date can't be in the past.");
       if (counterOfferId) {
         const { data, error } = await supabase.from("price_offers").update({ status: "countered" }).eq("id", counterOfferId).eq("status", "pending").select("id");
         if (error) throw error;
         if (!data?.length) throw new Error("That price was already answered. Refresh and try again.");
       }
-      const { error } = await supabase.from("price_offers").insert({ conversation_id: conversationId, sender_id: user.id, amount });
+      const { error } = await supabase.from("price_offers").insert({ conversation_id: conversationId, sender_id: user.id, amount, start_date: startDate, end_date: endDate });
       if (error) throw error;
     },
     onSuccess: () => {
       setAmountInput("");
+      setStartInput("");
+      setEndInput("");
       setConfirm(null);
       refresh();
     },
@@ -146,12 +167,13 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
 
   const submitTyped = (event: FormEvent) => {
     event.preventDefault();
-    if (!amountInput) return;
-    const request = { amount: typedAmount, counterOfferId: pendingOffer?.id };
+    if (!amountInput || !datesValid) return;
+    const request = { amount: typedAmount, startDate: formStart, endDate: formEnd, counterOfferId: pendingOffer?.id };
     if (isOwner) setConfirm({ kind: "send", ...request });
     else sendOffer.mutate(request);
   };
 
+  const confirmDates = confirm?.kind === "send" ? `${confirm.startDate} to ${confirm.endDate}` : confirm?.kind === "accept" && confirm.offer.start_date ? `${confirm.offer.start_date} to ${confirm.offer.end_date}` : null;
   const confirmAmount = confirm?.kind === "send" ? confirm.amount : confirm?.kind === "accept" ? Number(confirm.offer.amount) : 0;
   const confirmNet = sellerNetPerDay(confirmAmount);
 
@@ -181,7 +203,7 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
                     {ownOffer ? "Your price" : isOwner ? "Buyer's price" : "Owner's price"}: {formatPrice(amount, currency)} / day
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {offerStatusLabel(offer.status)} · {format(parseISO(offer.created_at), "d MMM, HH:mm")}
+                    {dateLabel(offer) ? `${dateLabel(offer)} · ` : ""}{offerStatusLabel(offer.status)} · {format(parseISO(offer.created_at), "d MMM, HH:mm")}
                     {isOwner && offer.status !== "declined" && offer.status !== "countered" ? ` · you receive ${formatPrice(net, currency)} / day` : ""}
                   </p>
                 </div>
@@ -217,7 +239,7 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
       {acceptedOffer && !paid && (
         <div className="mt-3 space-y-2">
           <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
-            Price agreed at {formatPrice(Number(acceptedOffer.amount), currency)} per day.
+            Price agreed at {formatPrice(Number(acceptedOffer.amount), currency)} per day{dateLabel(acceptedOffer) ? ` for ${dateLabel(acceptedOffer)}` : ""}.
             {isOwner ? " The buyer can pay at any time. You can cancel until they pay." : ""}
           </p>
           {!isOwner && canBuyerCheckout(acceptedOffer.status) && (
@@ -233,10 +255,17 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
           {waitingOnOther && <p className="mt-3 text-xs text-muted-foreground">Your price is waiting for the other person to respond.</p>}
 
           {!isOwner && !pendingOffer && (
-            <Button type="button" variant="ocean" size="sm" className="mt-3" disabled={busy} onClick={() => sendOffer.mutate({ amount: boat.daily_price })}>
-              {sendOffer.isPending ? <LoaderCircle className="animate-spin" /> : null}
-              Request to buy at {formatPrice(boat.daily_price, currency)} / day
-            </Button>
+            <div className="mt-3 space-y-2">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="space-y-1 text-xs font-medium">Pick-up date<Input type="date" min={today} value={startInput} onChange={(event) => onStartChange(event.currentTarget.value)} disabled={busy} /></label>
+                <label className="space-y-1 text-xs font-medium">Return date<Input type="date" min={startInput || today} value={endInput} onChange={(event) => setEndInput(event.currentTarget.value)} disabled={busy} /></label>
+              </div>
+              <Button type="button" variant="ocean" size="sm" disabled={busy || !datesValid} onClick={() => sendOffer.mutate({ amount: boat.daily_price, startDate: formStart, endDate: formEnd })}>
+                {sendOffer.isPending ? <LoaderCircle className="animate-spin" /> : null}
+                Request to buy at {formatPrice(boat.daily_price, currency)} / day{formDays > 0 ? ` · ${formDays} ${formDays === 1 ? "day" : "days"}` : ""}
+              </Button>
+              {!datesValid && <p className="text-xs text-muted-foreground">Choose your dates to request or negotiate.</p>}
+            </div>
           )}
 
           {!waitingOnOther && canCounter && (
@@ -248,11 +277,19 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
                   </label>
                   <Input id="offerAmount" type="number" min="0.01" step="0.01" required value={amountInput} onChange={(event) => setAmountInput(event.currentTarget.value)} placeholder={String(boat.daily_price)} disabled={busy} />
                 </div>
-                <Button type="submit" variant="ocean" disabled={!amountInput || busy}>
+                <Button type="submit" variant="ocean" disabled={!amountInput || !datesValid || busy}>
                   {sendOffer.isPending ? <LoaderCircle className="animate-spin" /> : null}
                   {isOwner ? "Send price" : pendingOffer ? "Counter" : "Send offer"}
                 </Button>
               </div>
+              {lockedDates ? (
+                <p className="text-xs text-muted-foreground">Dates requested by the buyer: <strong>{lockedDates.start} to {lockedDates.end}</strong> ({formDays} {formDays === 1 ? "day" : "days"}).</p>
+              ) : isOwner || pendingOffer ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="space-y-1 text-xs font-medium">Pick-up date<Input type="date" min={today} value={startInput} onChange={(event) => onStartChange(event.currentTarget.value)} disabled={busy} /></label>
+                  <label className="space-y-1 text-xs font-medium">Return date<Input type="date" min={startInput || today} value={endInput} onChange={(event) => setEndInput(event.currentTarget.value)} disabled={busy} /></label>
+                </div>
+              ) : null}
               {isOwner && typedNet && (
                 <p className="text-xs text-muted-foreground">
                   You would receive <strong>{formatPrice(typedNet.net, currency)}</strong> per day after the 3% DinghyCharter fee ({formatPrice(typedNet.fee, currency)}).
@@ -282,7 +319,7 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
               ) : (
                 <div className="space-y-2 text-sm">
                   <p>
-                    Price: <strong>{formatPrice(confirmAmount, currency)}</strong> per day. You receive <strong>{formatPrice(confirmNet.net, currency)}</strong> per day after the 3% DinghyCharter fee ({formatPrice(confirmNet.fee, currency)}).
+                    Price: <strong>{formatPrice(confirmAmount, currency)}</strong> per day{confirmDates ? <> for <strong>{confirmDates}</strong></> : null}. You receive <strong>{formatPrice(confirmNet.net, currency)}</strong> per day after the 3% DinghyCharter fee ({formatPrice(confirmNet.fee, currency)}).
                   </p>
                   <p>From this moment the buyer can pay at any time. You can cancel this price until the buyer pays. After payment nothing can be cancelled.</p>
                 </div>
@@ -296,7 +333,7 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
               onClick={(event) => {
                 event.preventDefault();
                 if (!confirm) return;
-                if (confirm.kind === "send") sendOffer.mutate({ amount: confirm.amount, counterOfferId: confirm.counterOfferId });
+                if (confirm.kind === "send") sendOffer.mutate({ amount: confirm.amount, startDate: confirm.startDate, endDate: confirm.endDate, counterOfferId: confirm.counterOfferId });
                 else if (confirm.kind === "accept") respond.mutate({ offerId: confirm.offer.id, status: "accepted" });
                 else cancel.mutate(confirm.offer.id);
               }}

@@ -25,7 +25,7 @@ function CheckoutPreviewPage() {
     queryKey: ["checkout-preview", offerId, user?.id],
     enabled: !!offerId && !!user,
     queryFn: async () => {
-      const { data: offer, error: offerError } = await supabase.from("price_offers").select("id, conversation_id, sender_id, amount, status").eq("id", offerId!).maybeSingle();
+      const { data: offer, error: offerError } = await supabase.from("price_offers").select("id, conversation_id, sender_id, amount, status, start_date, end_date").eq("id", offerId!).maybeSingle();
       if (offerError) throw offerError;
       if (offer?.status === "cancelled") throw new Error("The owner cancelled this price, so it can no longer be paid. Message the owner to agree a new price.");
       if (!offer || (offer.status !== "accepted" && offer.status !== "paid")) throw new Error("This price has not been accepted or is no longer available.");
@@ -42,7 +42,10 @@ function CheckoutPreviewPage() {
   });
 
   const record = checkoutQuery.data;
-  const days = startDate && endDate ? countCharterDays(startDate, endDate) : 0;
+  const agreedDates = record?.offer.start_date && record.offer.end_date ? { start: record.offer.start_date, end: record.offer.end_date } : null;
+  const effectiveStart = agreedDates?.start ?? startDate;
+  const effectiveEnd = agreedDates?.end ?? endDate;
+  const days = effectiveStart && effectiveEnd ? countCharterDays(effectiveStart, effectiveEnd) : 0;
   const rentalSubtotal = record && days > 0 ? Math.round(Number(record.offer.amount) * days * 100) / 100 : 0;
   const fees = useMemo(() => calculatePlatformFees(rentalSubtotal), [rentalSubtotal]);
   const currency = record?.boat.currency ?? "EUR";
@@ -61,10 +64,14 @@ function CheckoutPreviewPage() {
           {loading || checkoutQuery.isLoading ? <div className="mt-8 rounded-2xl border border-border p-6 text-muted-foreground">Loading accepted offer…</div> : checkoutQuery.isError ? <div role="alert" className="mt-8 rounded-2xl border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive">{checkoutQuery.error instanceof Error ? checkoutQuery.error.message : "Could not load this accepted offer."}</div> : record ? (
             <div className="mt-8 space-y-6 rounded-2xl border border-border bg-card p-6 shadow-card">
               <div><h2 className="text-xl font-semibold">{record.boat.title}</h2><p className="mt-1 text-sm text-muted-foreground">{record.boat.city}, {record.boat.country}</p></div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="space-y-2 text-sm font-medium">Pick-up date <span className="text-destructive">*</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={startDate} onChange={(e) => { setStartDate(e.target.value); if (endDate && e.target.value > endDate) setEndDate(""); }} className="h-11 w-full rounded-xl border border-input bg-background px-3" /></label>
-                <label className="space-y-2 text-sm font-medium">Return date <span className="text-destructive">*</span><input type="date" min={startDate || new Date().toISOString().slice(0, 10)} value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-11 w-full rounded-xl border border-input bg-background px-3" /></label>
-              </div>
+              {agreedDates ? (
+                <div className="flex items-start gap-3 rounded-xl border border-border p-4 text-sm"><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-ocean" /><p><strong>{agreedDates.start}</strong> to <strong>{agreedDates.end}</strong> ({days} {days === 1 ? "day" : "days"}), as agreed with the owner.</p></div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="space-y-2 text-sm font-medium">Pick-up date <span className="text-destructive">*</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={startDate} onChange={(e) => { setStartDate(e.target.value); if (endDate && e.target.value > endDate) setEndDate(""); }} className="h-11 w-full rounded-xl border border-input bg-background px-3" /></label>
+                  <label className="space-y-2 text-sm font-medium">Return date <span className="text-destructive">*</span><input type="date" min={startDate || new Date().toISOString().slice(0, 10)} value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-11 w-full rounded-xl border border-input bg-background px-3" /></label>
+                </div>
+              )}
               <div className="flex items-start gap-3 rounded-xl bg-secondary/60 p-4 text-sm"><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-ocean" /><p>The agreed rate is <strong>{formatPrice(Number(record.offer.amount), currency)} per day</strong>. Check that your dates match the booking you discussed with the owner.</p></div>
               {record.boat.cancellation_policy && <div><h3 className="font-semibold">Cancellation policy</h3><p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{record.boat.cancellation_policy}</p></div>}
             </div>

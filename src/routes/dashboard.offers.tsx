@@ -56,7 +56,7 @@ function OwnerOffersPage() {
       const buyerIds = [...new Set(conversations.map((conversation) => conversation.sailor_id))];
 
       const [offersResult, boatsResult, profilesResult] = await Promise.all([
-        supabase.from("price_offers").select("id, conversation_id, amount, status, created_at").in("conversation_id", conversationIds).in("status", ["pending", "accepted", "paid"]).order("created_at", { ascending: false }),
+        supabase.from("price_offers").select("id, conversation_id, amount, status, created_at, start_date, end_date").in("conversation_id", conversationIds).in("status", ["pending", "accepted", "paid"]).order("created_at", { ascending: false }),
         supabase.from("boats").select("id, title, currency").in("id", boatIds),
         supabase.from("profiles").select("id, full_name").in("id", buyerIds),
       ]);
@@ -77,6 +77,7 @@ function OwnerOffersPage() {
           amount: Number(offer.amount),
           status: offer.status,
           createdAt: offer.created_at,
+          dates: offer.start_date && offer.end_date ? `${offer.start_date} to ${offer.end_date}` : null,
           boatTitle: boat?.title ?? "Boat",
           currency: boat?.currency ?? "EUR",
           buyerName: profileById.get(conversation.sailor_id)?.full_name ?? "Buyer",
@@ -137,7 +138,7 @@ function OwnerOffersPage() {
             <div key={offer.id} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4 shadow-card">
               <div className="min-w-0">
                 <p className="truncate font-semibold">{offer.boatTitle}</p>
-                <p className="text-sm text-muted-foreground">{offer.buyerName} · {format(parseISO(offer.createdAt), "d MMM, HH:mm")}</p>
+                <p className="text-sm text-muted-foreground">{offer.buyerName} · {offer.dates ? `${offer.dates} · ` : ""}{format(parseISO(offer.createdAt), "d MMM, HH:mm")}</p>
                 <p className="mt-1 text-sm">
                   <strong>{formatPrice(offer.amount, offer.currency)}</strong> / day · you receive <strong>{formatPrice(net, offer.currency)}</strong> / day after the 3% fee
                 </p>

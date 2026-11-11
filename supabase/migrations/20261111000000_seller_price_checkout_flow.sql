@@ -10,6 +10,7 @@
 -- Rules enforced here (not only in the UI):
 --   * The owner can always propose a price, even on non-negotiable boats.
 --   * A buyer can only send the listed price on non-negotiable boats ("request to buy").
+--   * Every price carries the charter dates chosen when it was sent.
 --   * No new offer once a price is accepted or paid.
 --   * Only the owner can cancel, and only while the offer is pending or accepted.
 --   * Only the service role (payment backend) can mark an offer as paid; paid is final.
@@ -31,6 +32,15 @@ alter table public.price_offers
   add constraint price_offers_status_check
   check (status in ('pending', 'accepted', 'declined', 'countered', 'cancelled', 'paid'));
 
+-- Every price now covers specific charter dates (inclusive, same rule as bookings).
+-- Older offers keep null dates; new offers must have them.
+alter table public.price_offers add column if not exists start_date date;
+alter table public.price_offers add column if not exists end_date date;
+alter table public.price_offers drop constraint if exists price_offers_dates_check;
+alter table public.price_offers
+  add constraint price_offers_dates_check
+  check ((start_date is null and end_date is null) or (start_date is not null and end_date is not null and end_date >= start_date));
+
 drop policy if exists "Participants create price offers on negotiable boats" on public.price_offers;
 drop policy if exists "Participants create price offers" on public.price_offers;
 create policy "Participants create price offers" on public.price_offers
@@ -38,6 +48,9 @@ create policy "Participants create price offers" on public.price_offers
   with check (
     sender_id = auth.uid()
     and status = 'pending'
+    and start_date is not null
+    and end_date is not null
+    and start_date >= current_date
     and exists (
       select 1
       from public.conversations c
@@ -75,6 +88,8 @@ begin
     or new.conversation_id <> old.conversation_id
     or new.sender_id <> old.sender_id
     or new.amount <> old.amount
+    or new.start_date is distinct from old.start_date
+    or new.end_date is distinct from old.end_date
     or new.created_at <> old.created_at
   then
     raise exception 'Price offer details cannot be changed';
