@@ -181,7 +181,7 @@ function OffersPage() {
               <p className="font-semibold">Payouts</p>
               <p className="text-sm text-muted-foreground">
                 {payoutQuery.data.chargesEnabled
-                  ? "Your Stripe account is ready. You are paid once the charter starts, minus the 3% DinghyCharter fee."
+                  ? "Your Stripe account is ready. Buyers pay straight into it. DinghyCharter keeps its fee, and Stripe's own card fees also apply."
                   : "Connect your Stripe account so buyers can pay you. It takes a few minutes and Stripe verifies your identity."}
               </p>
             </div>

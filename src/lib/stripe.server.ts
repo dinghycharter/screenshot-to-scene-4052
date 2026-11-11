@@ -43,7 +43,7 @@ export async function stripeRequest(
   method: "GET" | "POST",
   path: string,
   params: Record<string, unknown> = {},
-  options: { idempotencyKey?: string } = {},
+  options: { idempotencyKey?: string; stripeAccount?: string } = {},
 ): Promise<StripeObject> {
   const secretKey = process.env["STRIPE_SECRET_KEY"];
   if (!secretKey) throw new StripeNotConfiguredError();
@@ -51,6 +51,8 @@ export async function stripeRequest(
   const encoded = new URLSearchParams(encodeParams(params)).toString();
   const headers: Record<string, string> = { Authorization: `Bearer ${secretKey}` };
   if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
+  // Direct charges: the request runs on the seller's own Stripe account.
+  if (options.stripeAccount) headers["Stripe-Account"] = options.stripeAccount;
 
   let url = `https://api.stripe.com/v1${path}`;
   let body: string | undefined;

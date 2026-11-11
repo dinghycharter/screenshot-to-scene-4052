@@ -119,7 +119,7 @@ function CheckoutPreviewPage() {
             <Button variant="ocean" size="lg" className="mt-6 w-full" disabled={isPaid || pay.isPending || confirm.isPending || days < 1} onClick={() => pay.mutate()}>
               {pay.isPending || confirm.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />} {isPaid ? "Paid" : "Continue to secure payment"}
             </Button>
-            <p className="mt-3 text-center text-xs text-muted-foreground">{isPaid ? "This charter has been paid and can no longer be cancelled." : "You pay securely with Stripe. After payment nothing can be cancelled. The owner is paid once your charter starts."}</p>
+            <p className="mt-3 text-center text-xs text-muted-foreground">{isPaid ? "This charter has been paid and can no longer be cancelled." : "You pay securely with Stripe. After payment nothing can be cancelled. The payment goes to the owner's Stripe account."}</p>
             <div className="mt-5 flex items-start gap-2 border-t border-border pt-4 text-xs text-muted-foreground"><ShieldCheck className="h-4 w-4 shrink-0 text-ocean" />The owner receives the rental amount minus the 3% seller fee: {formatPrice(fees.sellerPayout, currency)} estimated for these dates, before payment processing costs.</div>
           </> : <p className="mt-3 text-sm text-muted-foreground">The breakdown will appear after an accepted offer loads.</p>}
         </aside>

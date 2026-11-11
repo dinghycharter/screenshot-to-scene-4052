@@ -47,7 +47,7 @@ export const getPayoutStatus = createServerFn({ method: "POST" })
     }
   });
 
-/** Creates the seller's Stripe Express account if needed and returns the onboarding link. */
+/** Creates the seller's own (Standard) Stripe account if needed and returns the onboarding link. */
 export const startPayoutOnboarding = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<PaymentResult<{ url: string }>> => {
@@ -62,7 +62,7 @@ export const startPayoutOnboarding = createServerFn({ method: "POST" })
         const account = await stripeRequest(
           "POST",
           "/accounts",
-          { type: "express", email, capabilities: { card_payments: { requested: true }, transfers: { requested: true } }, metadata: { user_id: context.userId } },
+          { type: "standard", email, metadata: { user_id: context.userId } },
           { idempotencyKey: `acct_${context.userId}` },
         );
         accountId = account["id"] as string;
@@ -127,9 +127,10 @@ export const createCheckout = createServerFn({ method: "POST" })
           { quantity: 1, price_data: { currency, unit_amount: fees.rental, product_data: { name: `${boat.title}: ${days} ${days === 1 ? "day" : "days"} (${offer.start_date} to ${offer.end_date})` } } },
           { quantity: 1, price_data: { currency, unit_amount: fees.buyerFee, product_data: { name: "DinghyCharter service fee (3%)" } } },
         ],
-        payment_intent_data: { transfer_group: `offer_${offer.id}`, metadata: { offer_id: offer.id } },
+        // Direct charge: the seller is paid on their own account; DinghyCharter only keeps the 3% + 3% fee.
+        payment_intent_data: { application_fee_amount: fees.platformGross, metadata: { offer_id: offer.id } },
         metadata: { offer_id: offer.id, buyer_id: context.userId, seller_id: conversation.owner_id },
-      });
+      }, { stripeAccount: seller.stripe_account_id });
 
       // Older unfinished attempts for this offer are no longer valid.
       await supabaseAdmin.from("payments").update({ status: "expired" }).eq("offer_id", offer.id).eq("status", "pending");

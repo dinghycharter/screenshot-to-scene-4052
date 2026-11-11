@@ -423,7 +423,7 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
                     {confirmFrom && confirmTo ? <> for <strong>{formatDateRange(confirmFrom, confirmTo)}</strong> ({confirmTotals.days} {confirmTotals.days === 1 ? "day" : "days"}, {formatMoney(confirmTotals.subtotal, currency)} total)</> : null}.
                   </p>
                   <p>
-                    You receive <strong>{formatMoney(confirmTotals.sellerNet, currency)}</strong> after the 3% DinghyCharter fee ({formatMoney(confirmTotals.sellerFee, currency)}).
+                    You receive <strong>{formatMoney(confirmTotals.sellerNet, currency)}</strong> after the 3% DinghyCharter fee ({formatMoney(confirmTotals.sellerFee, currency)}), before Stripe's card fees.
                   </p>
                   <p>From this moment the buyer can pay at any time. You can cancel until the buyer pays. After payment nothing can be cancelled.</p>
                 </div>

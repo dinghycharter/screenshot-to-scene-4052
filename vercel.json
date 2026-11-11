@@ -1,5 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "tanstack-start",
-  "crons": [{ "path": "/api/payouts/release", "schedule": "0 7 * * *" }]
+  "framework": "tanstack-start"
 }

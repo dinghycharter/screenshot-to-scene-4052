@@ -480,12 +480,10 @@ export type Database = {
           seller_id: string
           seller_payout_cents: number
           start_date: string
-          status: "pending" | "paid" | "transferred" | "refunded" | "expired"
+          status: "pending" | "paid" | "refunded" | "expired"
           stripe_charge_id: string | null
           stripe_payment_intent_id: string | null
           stripe_session_id: string | null
-          stripe_transfer_id: string | null
-          transferred_at: string | null
         }
         Insert: {
           buyer_fee_cents: number
@@ -504,12 +502,10 @@ export type Database = {
           seller_id: string
           seller_payout_cents: number
           start_date: string
-          status?: "pending" | "paid" | "transferred" | "refunded" | "expired"
+          status?: "pending" | "paid" | "refunded" | "expired"
           stripe_charge_id?: string | null
           stripe_payment_intent_id?: string | null
           stripe_session_id?: string | null
-          stripe_transfer_id?: string | null
-          transferred_at?: string | null
         }
         Update: {
           buyer_fee_cents?: number
@@ -528,12 +524,10 @@ export type Database = {
           seller_id?: string
           seller_payout_cents?: number
           start_date?: string
-          status?: "pending" | "paid" | "transferred" | "refunded" | "expired"
+          status?: "pending" | "paid" | "refunded" | "expired"
           stripe_charge_id?: string | null
           stripe_payment_intent_id?: string | null
           stripe_session_id?: string | null
-          stripe_transfer_id?: string | null
-          transferred_at?: string | null
         }
         Relationships: []
       }

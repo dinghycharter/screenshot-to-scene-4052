@@ -1,4 +1,6 @@
--- Stripe payments (test mode first): seller payout accounts and one payment per paid offer.
+-- Stripe payments (test mode first): seller accounts and one payment per paid offer.
+-- Direct charges: the buyer pays the seller's own Stripe account and DinghyCharter only receives its fee,
+-- so the seller's money never passes through the platform account.
 -- Clients can only read their own rows. All writes come from the server with the service role.
 
 create table if not exists public.seller_payout_accounts (
@@ -28,26 +30,23 @@ create table if not exists public.payments (
   buyer_fee_cents integer not null check (buyer_fee_cents >= 0),
   seller_fee_cents integer not null check (seller_fee_cents >= 0),
   buyer_total_cents integer not null check (buyer_total_cents > 0),
-  seller_payout_cents integer not null check (seller_payout_cents > 0),
+  seller_payout_cents integer not null check (seller_payout_cents > 0), -- rental minus the 3% seller fee, before Stripe fees
   start_date date not null,
   end_date date not null,
-  -- pending: checkout started; paid: money collected, seller not paid yet;
-  -- transferred: seller paid after pick-up; refunded / expired: no charter.
-  status text not null default 'pending' check (status in ('pending', 'paid', 'transferred', 'refunded', 'expired')),
+  -- pending: checkout started; paid: charge succeeded on the seller's account;
+  -- refunded / expired: no charter.
+  status text not null default 'pending' check (status in ('pending', 'paid', 'refunded', 'expired')),
   stripe_session_id text unique,
   stripe_payment_intent_id text,
   stripe_charge_id text,
-  stripe_transfer_id text,
   created_at timestamptz not null default now(),
   paid_at timestamptz,
-  transferred_at timestamptz,
   refunded_at timestamptz
 );
 
 -- A charter can only be paid once.
 create unique index if not exists payments_one_paid_per_offer
-  on public.payments (offer_id) where status in ('paid', 'transferred');
-create index if not exists payments_due_payouts on public.payments (status, start_date);
+  on public.payments (offer_id) where status = 'paid';
 
 alter table public.payments enable row level security;
 

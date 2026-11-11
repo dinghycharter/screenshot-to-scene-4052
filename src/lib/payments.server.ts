@@ -1,4 +1,5 @@
-// Server-only payment logic shared by server functions, the Stripe webhook and the payout cron.
+// Server-only payment logic shared by server functions and the Stripe webhook.
+// Direct charges: payments are made on the seller's own Stripe account and DinghyCharter keeps an application fee.
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { stripeRequest, type StripeObject } from "@/lib/stripe.server";
 
@@ -6,23 +7,29 @@ export type CheckoutOutcome = "paid" | "pending" | "refunded" | "expired";
 
 /**
  * Turns a paid Stripe Checkout Session into a paid offer. Safe to call many times
- * (webhook and return page can both call it).
+ * (the webhook and the return page can both call it).
  * If the owner cancelled the price while the buyer was paying, the payment is refunded automatically.
  */
 export async function finalizeCheckoutSession(sessionId: string): Promise<CheckoutOutcome> {
-  const session = await stripeRequest("GET", `/checkout/sessions/${encodeURIComponent(sessionId)}`, {
-    expand: ["payment_intent.latest_charge"],
-  });
-
   const { data: payment, error } = await supabaseAdmin.from("payments").select("*").eq("stripe_session_id", sessionId).maybeSingle();
   if (error) throw error;
   if (!payment) {
     console.error("[payments] Checkout session without a payment row", sessionId);
     return "pending";
   }
-  if (payment.status === "paid" || payment.status === "transferred") return "paid";
+  if (payment.status === "paid") return "paid";
   if (payment.status === "refunded") return "refunded";
 
+  const { data: seller } = await supabaseAdmin.from("seller_payout_accounts").select("stripe_account_id").eq("user_id", payment.seller_id).maybeSingle();
+  if (!seller?.stripe_account_id) throw new Error("Seller Stripe account not found for payment " + payment.id);
+  const stripeAccount = seller.stripe_account_id;
+
+  const session = await stripeRequest(
+    "GET",
+    `/checkout/sessions/${encodeURIComponent(sessionId)}`,
+    { expand: ["payment_intent.latest_charge"] },
+    { stripeAccount },
+  );
   if (session["payment_status"] !== "paid") {
     return session["status"] === "expired" ? "expired" : "pending";
   }
@@ -43,8 +50,13 @@ export async function finalizeCheckoutSession(sessionId: string): Promise<Checko
     await stripeRequest(
       "POST",
       "/refunds",
-      { payment_intent: paymentIntent["id"], reason: "requested_by_customer", metadata: { payment_id: payment.id, cause: "offer_no_longer_accepted" } },
-      { idempotencyKey: `refund_${payment.id}` },
+      {
+        payment_intent: paymentIntent["id"],
+        refund_application_fee: true,
+        reason: "requested_by_customer",
+        metadata: { payment_id: payment.id, cause: "offer_no_longer_accepted" },
+      },
+      { idempotencyKey: `refund_${payment.id}`, stripeAccount },
     );
     await supabaseAdmin
       .from("payments")
@@ -64,51 +76,6 @@ export async function finalizeCheckoutSession(sessionId: string): Promise<Checko
     .eq("id", payment.id);
   if (paymentError) throw paymentError;
   return "paid";
-}
-
-/**
- * Pays sellers once the charter has started. The money was collected on the platform account;
- * this moves the seller's share (rental minus the 3% seller fee) to their connected account.
- */
-export async function releaseDuePayouts(): Promise<{ transferred: number; skipped: number; failed: number }> {
-  const today = new Date().toISOString().slice(0, 10);
-  const { data: due, error } = await supabaseAdmin.from("payments").select("*").eq("status", "paid").lte("start_date", today).limit(50);
-  if (error) throw error;
-
-  let transferred = 0;
-  let skipped = 0;
-  let failed = 0;
-  for (const payment of due ?? []) {
-    const { data: account } = await supabaseAdmin.from("seller_payout_accounts").select("stripe_account_id").eq("user_id", payment.seller_id).maybeSingle();
-    if (!account?.stripe_account_id || !payment.stripe_charge_id) {
-      skipped += 1;
-      continue;
-    }
-    try {
-      const transfer = await stripeRequest(
-        "POST",
-        "/transfers",
-        {
-          amount: payment.seller_payout_cents,
-          currency: payment.currency,
-          destination: account.stripe_account_id,
-          source_transaction: payment.stripe_charge_id,
-          transfer_group: `offer_${payment.offer_id}`,
-          metadata: { payment_id: payment.id, offer_id: payment.offer_id },
-        },
-        { idempotencyKey: `transfer_${payment.id}` },
-      );
-      await supabaseAdmin
-        .from("payments")
-        .update({ status: "transferred", stripe_transfer_id: transfer["id"], transferred_at: new Date().toISOString() })
-        .eq("id", payment.id);
-      transferred += 1;
-    } catch (cause) {
-      console.error("[payments] Transfer failed", payment.id, cause);
-      failed += 1;
-    }
-  }
-  return { transferred, skipped, failed };
 }
 
 export async function syncPayoutAccount(account: StripeObject) {
