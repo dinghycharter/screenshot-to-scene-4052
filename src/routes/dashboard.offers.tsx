@@ -197,6 +197,12 @@ function OffersPage() {
         </div>
       )}
 
+      {role === "seller" && payoutQuery.data && !payoutQuery.data.ok && (
+        <p role="alert" className="mt-6 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          {payoutQuery.data.error} <button type="button" className="underline" onClick={() => void payoutQuery.refetch()}>Try again</button>
+        </p>
+      )}
+
       {showTabs && (
         <div className="mt-6 inline-flex rounded-full border border-border bg-secondary/50 p-1 text-sm font-medium" role="tablist">
           {(["buyer", "seller"] as const).map((value) => (

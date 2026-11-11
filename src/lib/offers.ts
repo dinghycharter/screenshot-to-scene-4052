@@ -51,5 +51,7 @@ export function offerTotals(dailyPrice: number, startDate: string | null | undef
 
 /** Like formatPrice, but keeps cents when there are any (fees and payouts are not round numbers). */
 export function formatMoney(amount: number | string, currency = "EUR") {
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(amount));
+  const value = Number(amount);
+  const digits = Number.isInteger(value) ? 0 : 2;
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency, minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
 }
