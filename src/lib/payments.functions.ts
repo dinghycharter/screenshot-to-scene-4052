@@ -52,22 +52,35 @@ export const startPayoutOnboarding = createServerFn({ method: "POST" })
       let accountId = existing?.stripe_account_id;
       if (!accountId) {
         const email = typeof context.claims["email"] === "string" ? context.claims["email"] : undefined;
-        const account = await stripeRequestV2(
-          "POST",
-          "/core/accounts",
-          {
-            contact_email: email,
-            // Express: a short onboarding and a simple Stripe page for the seller, no full Stripe dashboard login.
-            // Stripe keeps owning card fees and negative-balance liability (supported for Express since API 2026-06-24).
-            dashboard: "express",
-            identity: { country: (data.country ?? "pt").toLowerCase() },
-            configuration: { merchant: { capabilities: { card_payments: { requested: true } } } },
-            defaults: { responsibilities: { fees_collector: "stripe", losses_collector: "stripe" } },
-            metadata: { user_id: context.userId },
-            include: ["configuration.merchant", "identity", "defaults"],
-          },
-          { idempotencyKey: `acct_v2_${context.userId}` },
-        );
+        // Sellers should not get a full Stripe dashboard login. Try the lightest options first and fall back
+        // when Stripe says the combination (with Stripe owning fees and losses) is not supported for this platform.
+        let account: Record<string, any> | undefined;
+        let lastError: unknown;
+        for (const dashboard of ["express", "none", "full"] as const) {
+          try {
+            account = await stripeRequestV2(
+              "POST",
+              "/core/accounts",
+              {
+                contact_email: email,
+                dashboard,
+                identity: { country: (data.country ?? "pt").toLowerCase() },
+                configuration: { merchant: { capabilities: { card_payments: { requested: true } } } },
+                defaults: { responsibilities: { fees_collector: "stripe", losses_collector: "stripe" } },
+                metadata: { user_id: context.userId },
+                include: ["configuration.merchant", "identity", "defaults"],
+              },
+              { idempotencyKey: `acct_v2_${context.userId}_${dashboard}` },
+            );
+            console.info(`[payments] seller account created with dashboard=${dashboard}`);
+            break;
+          } catch (cause) {
+            lastError = cause;
+            if (!(cause instanceof Error) || !/not supported/i.test(cause.message)) throw cause;
+            console.warn(`[payments] dashboard=${dashboard} not supported, trying next`);
+          }
+        }
+        if (!account) throw lastError;
         accountId = account["id"] as string;
         const { error } = await supabaseAdmin.from("seller_payout_accounts").insert({ user_id: context.userId, stripe_account_id: accountId });
         if (error) throw error;
