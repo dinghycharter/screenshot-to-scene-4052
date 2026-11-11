@@ -78,7 +78,6 @@ export const startPayoutOnboarding = createServerFn({ method: "POST" })
         use_case: {
           type: "account_onboarding",
           account_onboarding: {
-            configurations: ["merchant"],
             refresh_url: `${base}/dashboard/offers?payouts=refresh`,
             return_url: `${base}/dashboard/offers?payouts=return`,
           },
