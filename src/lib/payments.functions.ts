@@ -39,7 +39,7 @@ export const getPayoutStatus = createServerFn({ method: "POST" })
     }
   });
 
-/** Creates the seller's own Stripe account (Accounts v2, full dashboard) if needed and returns the onboarding link. */
+/** Creates the seller's own Stripe account (Accounts v2, Express dashboard) if needed and returns the onboarding link. */
 export const startPayoutOnboarding = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { country?: string } | undefined) => z.object({ country: z.string().length(2).optional() }).parse(input ?? {}))
@@ -57,7 +57,9 @@ export const startPayoutOnboarding = createServerFn({ method: "POST" })
           "/core/accounts",
           {
             contact_email: email,
-            dashboard: "full",
+            // Express: a short onboarding and a simple Stripe page for the seller, no full Stripe dashboard login.
+            // Stripe keeps owning card fees and negative-balance liability (supported for Express since API 2026-06-24).
+            dashboard: "express",
             identity: { country: (data.country ?? "pt").toLowerCase() },
             configuration: { merchant: { capabilities: { card_payments: { requested: true } } } },
             defaults: { responsibilities: { fees_collector: "stripe", losses_collector: "stripe" } },
