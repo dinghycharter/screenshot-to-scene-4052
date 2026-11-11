@@ -16,19 +16,20 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { countCharterDays } from "@/lib/booking";
+import { DateRangeField } from "@/components/offers/DateRangeField";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
-import { formatPrice } from "@/lib/format";
-import { canBuyerCheckout, canOwnerCancel, hasPaidOffer, hasSettledOffer, offerStatusLabel, sellerNetPerDay } from "@/lib/offers";
+import { isRangeBookable, type Range } from "@/lib/availability";
+import { formatDateRange } from "@/lib/format";
+import { canBuyerCheckout, canOwnerCancel, formatMoney, hasPaidOffer, hasSettledOffer, offerStatusLabel, offerTotals } from "@/lib/offers";
 
 type PriceOffer = Tables<"price_offers">;
 
 type Props = {
   conversationId: string;
   ownerId: string;
-  boat: { daily_price: number; currency: string; price_negotiable: boolean };
+  boat: { id: string; daily_price: number; currency: string; price_negotiable: boolean };
   closed: boolean;
 };
 
@@ -39,11 +40,20 @@ type Confirm =
 
 export const priceOffersKey = (conversationId: string) => ["price-offers", conversationId] as const;
 
+const STATUS_STYLE: Record<string, string> = {
+  pending: "bg-amber-50 text-amber-800",
+  accepted: "bg-emerald-50 text-emerald-800",
+  paid: "bg-emerald-100 text-emerald-900",
+  declined: "bg-secondary text-muted-foreground",
+  countered: "bg-secondary text-muted-foreground",
+  cancelled: "bg-destructive/10 text-destructive",
+};
+
 /**
- * Price and checkout steps of a conversation:
- * 1. the buyer asks to buy at the listed price, or proposes another price;
- * 2. the owner accepts, or answers with a different price (the owner can always set a price);
- * 3. the buyer accepts the agreed price and reviews checkout.
+ * Dates, price and checkout of a conversation. The price is per day and applies to the chosen dates.
+ * 1. The buyer picks dates the boat is open for and asks to buy (listed price) or proposes a price.
+ * 2. The owner accepts, or answers with another price and/or other dates (the owner can always do this).
+ * 3. The buyer accepts the agreed price and reviews checkout.
  * The owner can cancel any unpaid price; once paid, nothing can be changed.
  */
 export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
@@ -56,6 +66,7 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
 
   const isOwner = user?.id === ownerId;
   const currency = boat.currency;
+  const today = format(new Date(), "yyyy-MM-dd");
 
   const offersQuery = useQuery({
     queryKey: priceOffersKey(conversationId),
@@ -68,6 +79,22 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
     },
   });
 
+  const datesQuery = useQuery({
+    queryKey: ["boat-open-dates", boat.id],
+    enabled: !!user,
+    staleTime: 60_000,
+    queryFn: async (): Promise<{ availability: Range[]; booked: Range[] }> => {
+      const [availability, booked] = await Promise.all([
+        supabase.from("availability").select("start_date, end_date").eq("boat_id", boat.id).gte("end_date", today).order("start_date"),
+        supabase.rpc("boat_booked_ranges", { _boat_id: boat.id }),
+      ]);
+      if (availability.error) throw availability.error;
+      return { availability: availability.data ?? [], booked: booked.data ?? [] };
+    },
+  });
+  const availability = datesQuery.data?.availability ?? [];
+  const booked = datesQuery.data?.booked ?? [];
+
   const offers = offersQuery.data ?? [];
   const pendingOffer = [...offers].reverse().find((offer) => offer.status === "pending") ?? null;
   const acceptedOffer = [...offers].reverse().find((offer) => offer.status === "accepted") ?? null;
@@ -75,38 +102,36 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
   const paid = hasPaidOffer(offers);
   const waitingOnOther = pendingOffer?.sender_id === user?.id;
   const canCounter = isOwner || boat.price_negotiable;
-  const today = format(new Date(), "yyyy-MM-dd");
-  // The owner answering a buyer's offer keeps the buyer's dates; otherwise dates are chosen here.
-  const lockedDates = pendingOffer?.start_date && pendingOffer.end_date && isOwner ? { start: pendingOffer.start_date, end: pendingOffer.end_date } : null;
-  const formStart = lockedDates?.start ?? (startInput || pendingOffer?.start_date || "");
-  const formEnd = lockedDates?.end ?? (endInput || (startInput ? "" : pendingOffer?.end_date) || "");
-  const formDays = formStart && formEnd ? countCharterDays(formStart, formEnd) : 0;
-  const datesValid = formDays > 0 && formStart >= today;
-  const dateLabel = (offer: PriceOffer) => (offer.start_date && offer.end_date ? `${format(parseISO(offer.start_date), "d MMM")} – ${format(parseISO(offer.end_date), "d MMM yyyy")}` : null);
 
-  const onStartChange = (value: string) => {
-    setStartInput(value);
-    if (endInput && value > endInput) setEndInput("");
-  };
+  // Dates default to the ones in the offer being answered; either side can change them.
+  const startDate = startInput || pendingOffer?.start_date || "";
+  const endDate = endInput || (startInput ? "" : (pendingOffer?.end_date ?? ""));
+  const typedAmount = Number(amountInput);
+  const hasAmount = Number.isFinite(typedAmount) && typedAmount > 0;
+  const datesChosen = !!startDate && !!endDate && endDate >= startDate && startDate >= today;
+  const datesAllowed = datesChosen && (isOwner || isRangeBookable(startDate, endDate, availability, booked));
+  const listedTotals = offerTotals(boat.daily_price, startDate, endDate);
+  const typedTotals = hasAmount ? offerTotals(typedAmount, startDate, endDate) : null;
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: priceOffersKey(conversationId) });
   };
 
   const sendOffer = useMutation({
-    mutationFn: async ({ amount, startDate, endDate, counterOfferId }: { amount: number; startDate: string; endDate: string; counterOfferId?: string }) => {
+    mutationFn: async ({ amount, startDate: from, endDate: to, counterOfferId }: { amount: number; startDate: string; endDate: string; counterOfferId?: string }) => {
       if (!user) throw new Error("Sign in to send a price.");
       if (closed) throw new Error("This conversation has been closed.");
       if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a valid daily price.");
-      if (!startDate || !endDate) throw new Error("Choose the charter dates.");
-      if (endDate < startDate) throw new Error("The return date must be on or after the pick-up date.");
-      if (startDate < today) throw new Error("The pick-up date can't be in the past.");
+      if (!from || !to) throw new Error("Choose the charter dates.");
+      if (to < from) throw new Error("The return date must be on or after the pick-up date.");
+      if (from < today) throw new Error("The pick-up date can't be in the past.");
+      if (!isOwner && !isRangeBookable(from, to, availability, booked)) throw new Error("Choose dates inside one open period of this boat.");
       if (counterOfferId) {
         const { data, error } = await supabase.from("price_offers").update({ status: "countered" }).eq("id", counterOfferId).eq("status", "pending").select("id");
         if (error) throw error;
         if (!data?.length) throw new Error("That price was already answered. Refresh and try again.");
       }
-      const { error } = await supabase.from("price_offers").insert({ conversation_id: conversationId, sender_id: user.id, amount, start_date: startDate, end_date: endDate });
+      const { error } = await supabase.from("price_offers").insert({ conversation_id: conversationId, sender_id: user.id, amount, start_date: from, end_date: to });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -162,68 +187,112 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
   if (!user) return null;
 
   const busy = sendOffer.isPending || respond.isPending || cancel.isPending;
-  const typedAmount = Number(amountInput);
-  const typedNet = Number.isFinite(typedAmount) && typedAmount > 0 ? sellerNetPerDay(typedAmount) : null;
+
+  // Step 1 buyer asks, 2 owner replies, 3 buyer confirms. Done once accepted.
+  const step = settled ? 4 : pendingOffer ? (pendingOffer.sender_id === ownerId ? 3 : 2) : 1;
 
   const submitTyped = (event: FormEvent) => {
     event.preventDefault();
-    if (!amountInput || !datesValid) return;
-    const request = { amount: typedAmount, startDate: formStart, endDate: formEnd, counterOfferId: pendingOffer?.id };
+    if (!hasAmount || !datesAllowed) return;
+    const request = { amount: typedAmount, startDate, endDate, counterOfferId: pendingOffer?.id };
     if (isOwner) setConfirm({ kind: "send", ...request });
     else sendOffer.mutate(request);
   };
 
-  const confirmDates = confirm?.kind === "send" ? `${confirm.startDate} to ${confirm.endDate}` : confirm?.kind === "accept" && confirm.offer.start_date ? `${confirm.offer.start_date} to ${confirm.offer.end_date}` : null;
-  const confirmAmount = confirm?.kind === "send" ? confirm.amount : confirm?.kind === "accept" ? Number(confirm.offer.amount) : 0;
-  const confirmNet = sellerNetPerDay(confirmAmount);
+  const confirmOffer = confirm?.kind === "accept" ? confirm.offer : null;
+  const confirmAmount = confirm?.kind === "send" ? confirm.amount : confirmOffer ? Number(confirmOffer.amount) : 0;
+  const confirmFrom = confirm?.kind === "send" ? confirm.startDate : confirmOffer?.start_date;
+  const confirmTo = confirm?.kind === "send" ? confirm.endDate : confirmOffer?.end_date;
+  const confirmTotals = offerTotals(confirmAmount, confirmFrom, confirmTo);
 
   return (
-    <div className="border-t border-ocean/20 bg-card p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-sm font-semibold">Price & checkout</p>
-          <p className="text-xs text-muted-foreground">Listed at {formatPrice(boat.daily_price, currency)} per day</p>
+    <div className="space-y-4 p-4">
+      <div>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold">Dates & price</p>
+            <p className="text-xs text-muted-foreground">Listed at {formatMoney(boat.daily_price, currency)} per day</p>
+          </div>
+          <span className="rounded-full bg-ocean-soft px-2.5 py-1 text-[11px] font-semibold text-ocean">{boat.price_negotiable ? "Negotiable" : "Fixed price"}</span>
         </div>
-        <span className="rounded-full bg-ocean-soft px-3 py-1 text-xs font-semibold text-ocean">{boat.price_negotiable ? "Negotiable" : "Fixed price"}</span>
+
+        <ol className="mt-3 grid grid-cols-3 gap-1.5 text-[10px] font-medium leading-tight">
+          {["Buyer asks", "Owner replies", "Buyer confirms"].map((label, index) => {
+            const done = step > index + 1;
+            const current = step === index + 1;
+            return (
+              <li key={label} className={`rounded-lg px-2 py-1.5 text-center ${done ? "bg-emerald-50 text-emerald-800" : current ? "bg-ocean text-ocean-foreground" : "bg-secondary text-muted-foreground"}`}>
+                {done ? <Check className="mx-auto mb-0.5 h-3 w-3" /> : <span className="block">{index + 1}</span>}
+                {label}
+              </li>
+            );
+          })}
+        </ol>
+
+        <div className="mt-3 rounded-xl bg-secondary/60 p-3 text-xs">
+          <p className="font-semibold">Open dates for this boat</p>
+          {datesQuery.isLoading ? (
+            <p className="mt-1 text-muted-foreground">Loading…</p>
+          ) : availability.length ? (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {availability.map((window) => (
+                <span key={`${window.start_date}-${window.end_date}`} className="rounded-full bg-background px-2.5 py-1 font-medium text-ocean ring-1 ring-ocean/20">
+                  {formatDateRange(window.start_date, window.end_date)}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-1 text-muted-foreground">No open dates listed. The owner can still offer dates.</p>
+          )}
+        </div>
       </div>
 
-      {offersQuery.isError && <p className="mt-2 text-xs text-destructive">Prices could not be loaded.</p>}
+      {offersQuery.isError && <p className="text-xs text-destructive">Prices could not be loaded.</p>}
 
       {offers.length > 0 && (
-        <div className="mt-3 max-h-44 space-y-2 overflow-y-auto">
+        <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
           {offers.map((offer) => {
             const ownOffer = offer.sender_id === user.id;
             const amount = Number(offer.amount);
-            const { net } = sellerNetPerDay(amount);
+            const totals = offerTotals(amount, offer.start_date, offer.end_date);
             const canRespond = !closed && offer.status === "pending" && !ownOffer;
+            const live = offer.status !== "declined" && offer.status !== "countered" && offer.status !== "cancelled";
             return (
-              <div key={offer.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border px-3 py-2">
-                <div>
-                  <p className="text-sm font-semibold">
-                    {ownOffer ? "Your price" : isOwner ? "Buyer's price" : "Owner's price"}: {formatPrice(amount, currency)} / day
-                  </p>
+              <div key={offer.id} className={`rounded-xl border p-3 ${live ? "border-border bg-card" : "border-border/60 bg-secondary/30 opacity-80"}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">{ownOffer ? "Your offer" : isOwner ? "Buyer's offer" : "Owner's offer"} · {format(parseISO(offer.created_at), "d MMM, HH:mm")}</p>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_STYLE[offer.status] ?? "bg-secondary"}`}>{offerStatusLabel(offer.status)}</span>
+                </div>
+                <p className="mt-1 text-sm font-semibold">{formatMoney(amount, currency)} <span className="font-normal text-muted-foreground">per day</span></p>
+                {offer.start_date && offer.end_date ? (
                   <p className="text-xs text-muted-foreground">
-                    {dateLabel(offer) ? `${dateLabel(offer)} · ` : ""}{offerStatusLabel(offer.status)} · {format(parseISO(offer.created_at), "d MMM, HH:mm")}
-                    {isOwner && offer.status !== "declined" && offer.status !== "countered" ? ` · you receive ${formatPrice(net, currency)} / day` : ""}
+                    {formatDateRange(offer.start_date, offer.end_date)} · {totals.days} {totals.days === 1 ? "day" : "days"} · <span className="font-medium text-foreground">{formatMoney(totals.subtotal, currency)} total</span>
                   </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {canRespond && (
-                    <>
-                      <Button type="button" size="sm" variant="ocean" disabled={busy} onClick={() => (isOwner ? setConfirm({ kind: "accept", offer }) : respond.mutate({ offerId: offer.id, status: "accepted" }))}>
-                        <Check /> Accept
+                ) : (
+                  <p className="text-xs text-muted-foreground">No dates on this older offer.</p>
+                )}
+                {isOwner && live && totals.days > 0 && (
+                  <p className="text-xs text-muted-foreground">You receive {formatMoney(totals.sellerNet, currency)} after the 3% fee.</p>
+                )}
+                {(canRespond || (isOwner && canOwnerCancel(offer.status))) && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {canRespond && (
+                      <>
+                        <Button type="button" size="sm" variant="ocean" disabled={busy} onClick={() => (isOwner ? setConfirm({ kind: "accept", offer }) : respond.mutate({ offerId: offer.id, status: "accepted" }))}>
+                          <Check /> Accept
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => respond.mutate({ offerId: offer.id, status: "declined" })}>
+                          <X /> Decline
+                        </Button>
+                      </>
+                    )}
+                    {isOwner && canOwnerCancel(offer.status) && (
+                      <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => setConfirm({ kind: "cancel", offer })}>
+                        Cancel price
                       </Button>
-                      <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => respond.mutate({ offerId: offer.id, status: "declined" })}>
-                        <X /> Decline
-                      </Button>
-                    </>
-                  )}
-                  {isOwner && canOwnerCancel(offer.status) && (
-                    <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => setConfirm({ kind: "cancel", offer })}>
-                      Cancel price
-                    </Button>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -231,19 +300,20 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
       )}
 
       {paid && (
-        <p className="mt-3 flex items-start gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
+        <p className="flex items-start gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /> Payment received. This deal can no longer be cancelled or changed.
         </p>
       )}
 
       {acceptedOffer && !paid && (
-        <div className="mt-3 space-y-2">
+        <div className="space-y-2">
           <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
-            Price agreed at {formatPrice(Number(acceptedOffer.amount), currency)} per day{dateLabel(acceptedOffer) ? ` for ${dateLabel(acceptedOffer)}` : ""}.
+            Agreed: {formatMoney(Number(acceptedOffer.amount), currency)} per day
+            {acceptedOffer.start_date && acceptedOffer.end_date ? ` for ${formatDateRange(acceptedOffer.start_date, acceptedOffer.end_date)}` : ""}.
             {isOwner ? " The buyer can pay at any time. You can cancel until they pay." : ""}
           </p>
           {!isOwner && canBuyerCheckout(acceptedOffer.status) && (
-            <Button asChild size="sm" variant="ocean">
+            <Button asChild size="sm" variant="ocean" className="w-full">
               <Link to="/checkout" search={{ offer: acceptedOffer.id }}>Review checkout</Link>
             </Button>
           )}
@@ -251,77 +321,97 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
       )}
 
       {!closed && !settled && (
-        <>
-          {waitingOnOther && <p className="mt-3 text-xs text-muted-foreground">Your price is waiting for the other person to respond.</p>}
+        <div className="space-y-3 border-t border-border pt-4">
+          {waitingOnOther && <p className="text-xs text-muted-foreground">Your offer is waiting for the other person to respond.</p>}
 
-          {!isOwner && !pendingOffer && (
-            <div className="mt-3 space-y-2">
-              <div className="grid gap-2 sm:grid-cols-2">
-                <label className="space-y-1 text-xs font-medium">Pick-up date<Input type="date" min={today} value={startInput} onChange={(event) => onStartChange(event.currentTarget.value)} disabled={busy} /></label>
-                <label className="space-y-1 text-xs font-medium">Return date<Input type="date" min={startInput || today} value={endInput} onChange={(event) => setEndInput(event.currentTarget.value)} disabled={busy} /></label>
-              </div>
-              <Button type="button" variant="ocean" size="sm" disabled={busy || !datesValid} onClick={() => sendOffer.mutate({ amount: boat.daily_price, startDate: formStart, endDate: formEnd })}>
-                {sendOffer.isPending ? <LoaderCircle className="animate-spin" /> : null}
-                Request to buy at {formatPrice(boat.daily_price, currency)} / day{formDays > 0 ? ` · ${formDays} ${formDays === 1 ? "day" : "days"}` : ""}
-              </Button>
-              {!datesValid && <p className="text-xs text-muted-foreground">Choose your dates to request or negotiate.</p>}
-            </div>
-          )}
-
-          {!waitingOnOther && canCounter && (
-            <form className="mt-3 space-y-2" onSubmit={submitTyped}>
-              <div className="flex flex-wrap items-end gap-2">
-                <div className="min-w-40 flex-1 space-y-1.5">
-                  <label htmlFor="offerAmount" className="text-xs font-medium">
-                    {isOwner ? (pendingOffer ? "Your price per day (answers their offer)" : "Set a price per day") : pendingOffer ? "Counter price per day" : "Or negotiate: your price per day"}
-                  </label>
-                  <Input id="offerAmount" type="number" min="0.01" step="0.01" required value={amountInput} onChange={(event) => setAmountInput(event.currentTarget.value)} placeholder={String(boat.daily_price)} disabled={busy} />
-                </div>
-                <Button type="submit" variant="ocean" disabled={!amountInput || !datesValid || busy}>
-                  {sendOffer.isPending ? <LoaderCircle className="animate-spin" /> : null}
-                  {isOwner ? "Send price" : pendingOffer ? "Counter" : "Send offer"}
-                </Button>
-              </div>
-              {lockedDates ? (
-                <p className="text-xs text-muted-foreground">Dates requested by the buyer: <strong>{lockedDates.start} to {lockedDates.end}</strong> ({formDays} {formDays === 1 ? "day" : "days"}).</p>
-              ) : isOwner || pendingOffer ? (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <label className="space-y-1 text-xs font-medium">Pick-up date<Input type="date" min={today} value={startInput} onChange={(event) => onStartChange(event.currentTarget.value)} disabled={busy} /></label>
-                  <label className="space-y-1 text-xs font-medium">Return date<Input type="date" min={startInput || today} value={endInput} onChange={(event) => setEndInput(event.currentTarget.value)} disabled={busy} /></label>
-                </div>
-              ) : null}
-              {isOwner && typedNet && (
-                <p className="text-xs text-muted-foreground">
-                  You would receive <strong>{formatPrice(typedNet.net, currency)}</strong> per day after the 3% DinghyCharter fee ({formatPrice(typedNet.fee, currency)}).
+          {!waitingOnOther && (
+            <form className="space-y-3" onSubmit={submitTyped}>
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium">
+                  {isOwner ? (pendingOffer ? "Answer with your dates" : "Dates") : pendingOffer ? "Dates" : "Your dates"}
+                  {!isOwner && <span className="font-normal text-muted-foreground"> · only open dates can be chosen</span>}
                 </p>
+                <DateRangeField
+                  start={startDate}
+                  end={endDate}
+                  onChange={(from, to) => {
+                    setStartInput(from);
+                    setEndInput(to);
+                  }}
+                  availability={availability}
+                  booked={booked}
+                  restrictToAvailable={!isOwner}
+                  disabled={busy}
+                />
+              </div>
+
+              {!isOwner && !pendingOffer && (
+                <Button type="button" variant="ocean" className="w-full" disabled={busy || !datesAllowed} onClick={() => sendOffer.mutate({ amount: boat.daily_price, startDate, endDate })}>
+                  {sendOffer.isPending ? <LoaderCircle className="animate-spin" /> : null}
+                  Request to buy at {formatMoney(boat.daily_price, currency)} / day
+                </Button>
+              )}
+              {!isOwner && !pendingOffer && datesAllowed && listedTotals.days > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {formatMoney(boat.daily_price, currency)} × {listedTotals.days} {listedTotals.days === 1 ? "day" : "days"} = <strong className="text-foreground">{formatMoney(listedTotals.subtotal, currency)}</strong> before the buyer fee.
+                </p>
+              )}
+
+              {canCounter && (
+                <div className="space-y-1.5">
+                  <label htmlFor="offerAmount" className="text-xs font-medium">
+                    {isOwner ? (pendingOffer ? "Your price per day" : "Set a price per day") : pendingOffer ? "Counter price per day" : "Or propose your price per day"}
+                  </label>
+                  <div className="flex gap-2">
+                    <Input id="offerAmount" type="number" min="0.01" step="0.01" value={amountInput} onChange={(event) => setAmountInput(event.currentTarget.value)} placeholder={String(boat.daily_price)} disabled={busy} className="h-10" />
+                    <Button type="submit" variant="ocean" className="h-10" disabled={!hasAmount || !datesAllowed || busy}>
+                      {sendOffer.isPending ? <LoaderCircle className="animate-spin" /> : null}
+                      {isOwner ? "Send" : pendingOffer ? "Counter" : "Offer"}
+                    </Button>
+                  </div>
+                  {typedTotals && typedTotals.days > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {formatMoney(typedAmount, currency)} × {typedTotals.days} {typedTotals.days === 1 ? "day" : "days"} = <strong className="text-foreground">{formatMoney(typedTotals.subtotal, currency)}</strong>
+                      {isOwner && (
+                        <>
+                          . You receive <strong className="text-foreground">{formatMoney(typedTotals.sellerNet, currency)}</strong> after the 3% DinghyCharter fee ({formatMoney(typedTotals.sellerFee, currency)}).
+                        </>
+                      )}
+                    </p>
+                  )}
+                </div>
               )}
             </form>
           )}
 
           {!isOwner && !boat.price_negotiable && pendingOffer && !waitingOnOther && (
-            <p className="mt-3 text-xs text-muted-foreground">This boat has a fixed price on the listing, but the owner has offered a different price. You can accept or decline it.</p>
+            <p className="text-xs text-muted-foreground">This boat has a fixed price on the listing, but the owner has offered something different. You can accept or decline it.</p>
           )}
-        </>
+        </div>
       )}
 
       <AlertDialog open={!!confirm} onOpenChange={(open) => { if (!open && !busy) setConfirm(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {confirm?.kind === "cancel" ? "Cancel this price?" : confirm?.kind === "accept" ? "Accept this price?" : "Send this price to the buyer?"}
+              {confirm?.kind === "cancel" ? "Cancel this price?" : confirm?.kind === "accept" ? "Accept this offer?" : "Send this offer to the buyer?"}
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               {confirm?.kind === "cancel" ? (
                 <div className="space-y-2 text-sm">
-                  <p>The buyer will no longer be able to pay at {formatPrice(Number(confirm.offer.amount), currency)} per day. You can send a new price afterwards.</p>
+                  <p>The buyer will no longer be able to pay {formatMoney(Number(confirm.offer.amount), currency)} per day. You can send a new price afterwards.</p>
                   <p>You can cancel until the buyer pays. After payment nothing can be cancelled.</p>
                 </div>
               ) : (
                 <div className="space-y-2 text-sm">
                   <p>
-                    Price: <strong>{formatPrice(confirmAmount, currency)}</strong> per day{confirmDates ? <> for <strong>{confirmDates}</strong></> : null}. You receive <strong>{formatPrice(confirmNet.net, currency)}</strong> per day after the 3% DinghyCharter fee ({formatPrice(confirmNet.fee, currency)}).
+                    <strong>{formatMoney(confirmAmount, currency)}</strong> per day
+                    {confirmFrom && confirmTo ? <> for <strong>{formatDateRange(confirmFrom, confirmTo)}</strong> ({confirmTotals.days} {confirmTotals.days === 1 ? "day" : "days"}, {formatMoney(confirmTotals.subtotal, currency)} total)</> : null}.
                   </p>
-                  <p>From this moment the buyer can pay at any time. You can cancel this price until the buyer pays. After payment nothing can be cancelled.</p>
+                  <p>
+                    You receive <strong>{formatMoney(confirmTotals.sellerNet, currency)}</strong> after the 3% DinghyCharter fee ({formatMoney(confirmTotals.sellerFee, currency)}).
+                  </p>
+                  <p>From this moment the buyer can pay at any time. You can cancel until the buyer pays. After payment nothing can be cancelled.</p>
                 </div>
               )}
             </AlertDialogDescription>
@@ -339,7 +429,7 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
               }}
             >
               {busy ? <LoaderCircle className="animate-spin" /> : null}
-              {confirm?.kind === "cancel" ? "Cancel price" : confirm?.kind === "accept" ? "Accept and allow payment" : "Send price"}
+              {confirm?.kind === "cancel" ? "Cancel price" : confirm?.kind === "accept" ? "Accept and allow payment" : "Send offer"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

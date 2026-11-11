@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canBuyerCheckout, canOwnerCancel, hasPaidOffer, hasSettledOffer, offerStatusLabel, sellerNetPerDay } from "./offers";
+import { canBuyerCheckout, canOwnerCancel, hasPaidOffer, hasSettledOffer, offerStatusLabel, offerTotals, sellerNetPerDay } from "./offers";
 
 describe("offer rules", () => {
   it("shows the owner payout after the 3% seller fee", () => {
@@ -30,5 +30,10 @@ describe("offer rules", () => {
   it("labels every status", () => {
     expect(offerStatusLabel("cancelled")).toBe("Cancelled");
     expect(offerStatusLabel("paid")).toBe("Paid");
+  });
+
+  it("applies the daily price to the chosen dates", () => {
+    expect(offerTotals(65, "2026-11-30", "2026-12-16")).toMatchObject({ days: 17, subtotal: 1105 });
+    expect(offerTotals(65, null, null)).toMatchObject({ days: 0, subtotal: 0 });
   });
 });

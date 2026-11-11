@@ -6,7 +6,7 @@ import { SaveButton } from "@/components/boats/SaveButton";
 import { ClassNameWithLogo } from "@/components/boats/ClassNameWithLogo";
 
 export function BoatCard({ boat, index = 0 }: { boat: BoatCardData; index?: number }) {
-  const next = boat.availability[0];
+  const shown = boat.availability.slice(0, 2);
   return (
     <Link
       to="/boats/$boatId"
@@ -50,11 +50,19 @@ export function BoatCard({ boat, index = 0 }: { boat: BoatCardData; index?: numb
           <MapPin className="h-3.5 w-3.5" />
           {boat.city}, {boat.country}
         </p>
-        <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <CalendarDays className="h-3.5 w-3.5" />
-          {next ? formatDateRange(next.start_date, next.end_date) : "Dates on request"}
-          {boat.availability.length > 1 && <span className="text-xs">+{boat.availability.length - 1} more</span>}
-        </p>
+        <div className="flex items-start gap-1.5 text-sm text-muted-foreground">
+          <CalendarDays className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          {shown.length ? (
+            <span className="flex flex-wrap gap-x-2 gap-y-0.5">
+              {shown.map((window) => (
+                <span key={`${window.start_date}-${window.end_date}`} className="font-medium text-foreground">{formatDateRange(window.start_date, window.end_date)}</span>
+              ))}
+              {boat.availability.length > shown.length && <span className="text-xs">+{boat.availability.length - shown.length} more</span>}
+            </span>
+          ) : (
+            <span>Dates on request</span>
+          )}
+        </div>
         <div className="flex items-center justify-between pt-1.5">
           <p className="text-[15px]">
             <span className="font-bold">{formatPrice(boat.dailyPrice, boat.currency)}</span>

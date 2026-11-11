@@ -94,13 +94,13 @@ export function SiteHeader() {
                 <DropdownMenuItem asChild>
                   <Link to="/dashboard/messages"><MessageCircle /> Messages</Link>
                 </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/dashboard/offers"><Tag /> {profile?.account_type === "owner" ? "Prices & offers" : "My offers"}</Link>
+                </DropdownMenuItem>
                 {profile?.account_type === "owner" ? (
                   <>
                     <DropdownMenuItem asChild>
                       <Link to="/dashboard/boats"><Sailboat /> My boats</Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link to="/dashboard/offers"><Tag /> Prices & offers</Link>
                     </DropdownMenuItem>
                   </>
                 ) : (
@@ -153,7 +153,7 @@ export function SiteHeader() {
                 <Link to="/events" className="rounded-lg px-3 py-3 font-medium hover:bg-secondary">Events</Link>
                 <Link to="/list-your-boat" className="rounded-lg px-3 py-3 font-medium hover:bg-secondary">List your boat</Link>
                 {user && <Link to="/dashboard/messages" className="flex items-center gap-2 rounded-lg px-3 py-3 font-medium hover:bg-secondary"><MessageCircle className="h-4 w-4" /> Messages</Link>}
-                {user && profile?.account_type === "owner" && <Link to="/dashboard/offers" className="flex items-center gap-2 rounded-lg px-3 py-3 font-medium hover:bg-secondary"><Tag className="h-4 w-4" /> Prices & offers</Link>}
+                {user && <Link to="/dashboard/offers" className="flex items-center gap-2 rounded-lg px-3 py-3 font-medium hover:bg-secondary"><Tag className="h-4 w-4" /> {profile?.account_type === "owner" ? "Prices & offers" : "My offers"}</Link>}
                 {user?.app_metadata?.role === "admin" && <Link to="/admin/moderation" className="flex items-center gap-2 rounded-lg px-3 py-3 font-medium hover:bg-secondary"><ShieldCheck className="h-4 w-4" /> Conversation moderation</Link>}
                 {!user && (
                   <div className="mt-4 grid gap-2">

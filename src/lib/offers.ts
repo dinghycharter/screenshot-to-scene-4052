@@ -1,3 +1,4 @@
+import { countCharterDays } from "./booking";
 import { calculatePlatformFees } from "./platform-fees";
 
 export type OfferStatus = "pending" | "accepted" | "declined" | "countered" | "cancelled" | "paid";
@@ -38,4 +39,17 @@ export function hasSettledOffer(offers: { status: string }[]): boolean {
 
 export function hasPaidOffer(offers: { status: string }[]): boolean {
   return offers.some((offer) => offer.status === "paid");
+}
+
+/** A price is per day and applies to the chosen dates (inclusive). */
+export function offerTotals(dailyPrice: number, startDate: string | null | undefined, endDate: string | null | undefined) {
+  const days = startDate && endDate ? countCharterDays(startDate, endDate) : 0;
+  const subtotal = Math.round(dailyPrice * days * 100) / 100;
+  const { sellerFee, sellerPayout } = calculatePlatformFees(subtotal);
+  return { days, subtotal, sellerFee, sellerNet: sellerPayout };
+}
+
+/** Like formatPrice, but keeps cents when there are any (fees and payouts are not round numbers). */
+export function formatMoney(amount: number | string, currency = "EUR") {
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(amount));
 }

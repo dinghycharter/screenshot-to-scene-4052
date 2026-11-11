@@ -10,6 +10,8 @@
 -- Rules enforced here (not only in the UI):
 --   * The owner can always propose a price, even on non-negotiable boats.
 --   * A buyer can only send the listed price on non-negotiable boats ("request to buy").
+--   * Buyers can only choose dates inside the boat's availability; the owner may offer other dates.
+--   * The price is per day and applies to the chosen dates.
 --   * Every price carries the charter dates chosen when it was sent.
 --   * No new offer once a price is accepted or paid.
 --   * Only the owner can cancel, and only while the offer is pending or accepted.
@@ -41,6 +43,21 @@ alter table public.price_offers
   add constraint price_offers_dates_check
   check ((start_date is null and end_date is null) or (start_date is not null and end_date is not null and end_date >= start_date));
 
+-- True when the dates sit inside one open availability window and clash with no confirmed booking.
+-- Security definer so buyers can be checked against bookings they cannot read.
+create or replace function public.offer_dates_available(_boat_id uuid, _start date, _end date)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.availability a
+    where a.boat_id = _boat_id and a.start_date <= _start and a.end_date >= _end
+  ) and not exists (
+    select 1 from public.bookings k
+    where k.boat_id = _boat_id and k.status = 'confirmed' and k.start_date <= _end and k.end_date >= _start
+  )
+$$;
+revoke all on function public.offer_dates_available(uuid, date, date) from public, anon;
+grant execute on function public.offer_dates_available(uuid, date, date) to authenticated;
+
 drop policy if exists "Participants create price offers on negotiable boats" on public.price_offers;
 drop policy if exists "Participants create price offers" on public.price_offers;
 create policy "Participants create price offers" on public.price_offers
@@ -59,6 +76,8 @@ create policy "Participants create price offers" on public.price_offers
         and (c.owner_id = auth.uid() or c.sailor_id = auth.uid())
         and c.closed_at is null
         and (c.owner_id = auth.uid() or b.price_negotiable = true or price_offers.amount = b.daily_price)
+        -- Buyers can only pick available dates; the owner may offer any dates.
+        and (c.owner_id = auth.uid() or public.offer_dates_available(b.id, price_offers.start_date, price_offers.end_date))
     )
     and not exists (
       select 1 from public.price_offers o

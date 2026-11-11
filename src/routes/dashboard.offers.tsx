@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { LoaderCircle, MessageCircle, ShieldCheck } from "lucide-react";
+import { CalendarDays, LoaderCircle, MessageCircle, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -17,48 +17,70 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
-import { formatPrice } from "@/lib/format";
-import { canOwnerCancel, offerStatusLabel, sellerNetPerDay } from "@/lib/offers";
+import { formatDateRange } from "@/lib/format";
+import { canBuyerCheckout, canOwnerCancel, formatMoney, offerStatusLabel, offerTotals } from "@/lib/offers";
 
 export const Route = createFileRoute("/dashboard/offers")({
-  head: () => ({ meta: [{ title: "Your prices and offers — DinghyCharter" }, { name: "robots", content: "noindex" }] }),
-  component: OwnerOffersPage,
+  head: () => ({ meta: [{ title: "Your offers — DinghyCharter" }, { name: "robots", content: "noindex" }] }),
+  component: OffersPage,
 });
 
-type OwnerOffer = {
+type Role = "buyer" | "seller";
+
+type DashboardOffer = {
   id: string;
+  role: Role;
   conversationId: string;
+  senderId: string;
   amount: number;
   status: string;
   createdAt: string;
+  startDate: string | null;
+  endDate: string | null;
   boatTitle: string;
   currency: string;
-  buyerName: string;
+  otherName: string;
 };
 
-function OwnerOffersPage() {
+const STATUS_STYLE: Record<string, string> = {
+  pending: "bg-amber-50 text-amber-800",
+  accepted: "bg-emerald-50 text-emerald-800",
+  paid: "bg-emerald-100 text-emerald-900",
+  cancelled: "bg-destructive/10 text-destructive",
+};
+
+function OffersPage() {
   const { user, loading } = useAuth();
   const queryClient = useQueryClient();
-  const [toCancel, setToCancel] = useState<OwnerOffer | null>(null);
-  const key = ["owner-offers", user?.id ?? "signed-out"] as const;
+  const [toCancel, setToCancel] = useState<DashboardOffer | null>(null);
+  const [roleChoice, setRoleChoice] = useState<Role | null>(null);
+  const key = ["dashboard-offers", user?.id ?? "signed-out"] as const;
 
   const offersQuery = useQuery({
     queryKey: key,
     enabled: !!user,
     refetchInterval: 8000,
-    queryFn: async (): Promise<OwnerOffer[]> => {
-      const { data: conversations, error: conversationError } = await supabase.from("conversations").select("id, boat_id, sailor_id").eq("owner_id", user!.id);
+    queryFn: async (): Promise<DashboardOffer[]> => {
+      const { data: conversations, error: conversationError } = await supabase
+        .from("conversations")
+        .select("id, boat_id, owner_id, sailor_id")
+        .or(`owner_id.eq.${user!.id},sailor_id.eq.${user!.id}`);
       if (conversationError) throw conversationError;
       if (!conversations?.length) return [];
 
       const conversationIds = conversations.map((conversation) => conversation.id);
       const boatIds = [...new Set(conversations.map((conversation) => conversation.boat_id))];
-      const buyerIds = [...new Set(conversations.map((conversation) => conversation.sailor_id))];
+      const personIds = [...new Set(conversations.flatMap((conversation) => [conversation.owner_id, conversation.sailor_id]))];
 
       const [offersResult, boatsResult, profilesResult] = await Promise.all([
-        supabase.from("price_offers").select("id, conversation_id, amount, status, created_at, start_date, end_date").in("conversation_id", conversationIds).in("status", ["pending", "accepted", "paid"]).order("created_at", { ascending: false }),
+        supabase
+          .from("price_offers")
+          .select("id, conversation_id, sender_id, amount, status, created_at, start_date, end_date")
+          .in("conversation_id", conversationIds)
+          .in("status", ["pending", "accepted", "paid", "cancelled"])
+          .order("created_at", { ascending: false }),
         supabase.from("boats").select("id, title, currency").in("id", boatIds),
-        supabase.from("profiles").select("id, full_name").in("id", buyerIds),
+        supabase.from("profiles").select("id, full_name").in("id", personIds),
       ]);
       if (offersResult.error) throw offersResult.error;
       if (boatsResult.error) throw boatsResult.error;
@@ -70,17 +92,22 @@ function OwnerOffersPage() {
 
       return (offersResult.data ?? []).map((offer) => {
         const conversation = conversationById.get(offer.conversation_id)!;
+        const role: Role = conversation.owner_id === user!.id ? "seller" : "buyer";
+        const otherId = role === "seller" ? conversation.sailor_id : conversation.owner_id;
         const boat = boatById.get(conversation.boat_id);
         return {
           id: offer.id,
+          role,
           conversationId: offer.conversation_id,
+          senderId: offer.sender_id,
           amount: Number(offer.amount),
           status: offer.status,
           createdAt: offer.created_at,
-          dates: offer.start_date && offer.end_date ? `${offer.start_date} to ${offer.end_date}` : null,
+          startDate: offer.start_date,
+          endDate: offer.end_date,
           boatTitle: boat?.title ?? "Boat",
           currency: boat?.currency ?? "EUR",
-          buyerName: profileById.get(conversation.sailor_id)?.full_name ?? "Buyer",
+          otherName: profileById.get(otherId)?.full_name || (role === "seller" ? "Buyer" : "Owner"),
         };
       });
     },
@@ -108,47 +135,85 @@ function OwnerOffersPage() {
     return (
       <div className="container-page grid min-h-[60vh] place-items-center text-center">
         <div>
-          <h1 className="font-display text-2xl font-semibold">Sign in to see your prices</h1>
+          <h1 className="font-display text-2xl font-semibold">Sign in to see your offers</h1>
           <Button asChild className="mt-6"><Link to="/auth" search={{ redirect: "/dashboard/offers" }}>Sign in</Link></Button>
         </div>
       </div>
     );
   }
 
-  const offers = offersQuery.data ?? [];
+  const all = offersQuery.data ?? [];
+  const sellerCount = all.filter((offer) => offer.role === "seller").length;
+  const buyerCount = all.filter((offer) => offer.role === "buyer").length;
+  const role: Role = roleChoice ?? (sellerCount > 0 && buyerCount === 0 ? "seller" : buyerCount > 0 && sellerCount === 0 ? "buyer" : sellerCount >= buyerCount ? "seller" : "buyer");
+  const offers = all.filter((offer) => offer.role === role);
+  const showTabs = sellerCount > 0 && buyerCount > 0;
 
   return (
     <main className="container-page min-h-[70vh] py-10 sm:py-14">
-      <h1 className="font-display text-3xl font-semibold">Your prices and offers</h1>
-      <p className="mt-2 max-w-2xl text-muted-foreground">Prices you or buyers have proposed on your boats. You can cancel a price at any time until the buyer pays. After payment nothing can be cancelled.</p>
+      <h1 className="font-display text-3xl font-semibold">Your offers</h1>
+      <p className="mt-2 max-w-2xl text-muted-foreground">
+        {role === "seller"
+          ? "Prices you or buyers have proposed on your boats, with their dates. You can cancel a price at any time until the buyer pays. After payment nothing can be cancelled."
+          : "Offers on boats you want to charter. When the owner agrees a price you can go to checkout from here."}
+      </p>
+
+      {showTabs && (
+        <div className="mt-6 inline-flex rounded-full border border-border bg-secondary/50 p-1 text-sm font-medium" role="tablist">
+          {(["buyer", "seller"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={role === value}
+              onClick={() => setRoleChoice(value)}
+              className={`rounded-full px-4 py-1.5 transition-colors ${role === value ? "bg-background shadow-soft" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              {value === "buyer" ? `As a buyer (${buyerCount})` : `As a seller (${sellerCount})`}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="mt-8 space-y-3">
         {offersQuery.isLoading ? (
           <div className="rounded-2xl border border-border p-6 text-muted-foreground">Loading…</div>
         ) : offersQuery.isError ? (
-          <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive">We couldn't load your prices. Try again in a moment.</div>
+          <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive">We couldn't load your offers. Try again in a moment.</div>
         ) : offers.length === 0 ? (
           <div className="rounded-2xl border border-border p-8 text-center text-muted-foreground">
-            No active prices yet. Open a conversation with a buyer to set a price.
+            {role === "seller" ? "No active prices yet. Open a conversation with a buyer to set a price." : "No offers yet. Message an owner, choose your dates and ask to buy."}
             <div className="mt-4"><Button asChild variant="outline" size="sm"><Link to="/dashboard/messages"><MessageCircle /> Go to messages</Link></Button></div>
           </div>
         ) : offers.map((offer) => {
-          const { net } = sellerNetPerDay(offer.amount);
+          const totals = offerTotals(offer.amount, offer.startDate, offer.endDate);
+          const awaitingMe = offer.status === "pending" && offer.senderId !== user.id;
           return (
             <div key={offer.id} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4 shadow-card">
-              <div className="min-w-0">
+              <div className="min-w-0 space-y-1">
                 <p className="truncate font-semibold">{offer.boatTitle}</p>
-                <p className="text-sm text-muted-foreground">{offer.buyerName} · {offer.dates ? `${offer.dates} · ` : ""}{format(parseISO(offer.createdAt), "d MMM, HH:mm")}</p>
-                <p className="mt-1 text-sm">
-                  <strong>{formatPrice(offer.amount, offer.currency)}</strong> / day · you receive <strong>{formatPrice(net, offer.currency)}</strong> / day after the 3% fee
+                <p className="text-sm text-muted-foreground">{role === "seller" ? "Buyer" : "Owner"}: {offer.otherName} · {format(parseISO(offer.createdAt), "d MMM, HH:mm")}</p>
+                {offer.startDate && offer.endDate && (
+                  <p className="flex items-center gap-1.5 text-sm"><CalendarDays className="h-3.5 w-3.5 text-ocean" /> {formatDateRange(offer.startDate, offer.endDate)} · {totals.days} {totals.days === 1 ? "day" : "days"}</p>
+                )}
+                <p className="text-sm">
+                  <strong>{formatMoney(offer.amount, offer.currency)}</strong> / day
+                  {totals.days > 0 && <> · <strong>{formatMoney(totals.subtotal, offer.currency)}</strong> total</>}
+                  {role === "seller" && totals.days > 0 && <> · you receive <strong>{formatMoney(totals.sellerNet, offer.currency)}</strong> after the 3% fee</>}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${offer.status === "paid" ? "bg-emerald-50 text-emerald-800" : "bg-ocean-soft text-ocean"}`}>{offerStatusLabel(offer.status)}</span>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_STYLE[offer.status] ?? "bg-ocean-soft text-ocean"}`}>
+                  {role === "buyer" && offer.status === "pending" ? (awaitingMe ? "Needs your answer" : "Waiting for the owner") : offerStatusLabel(offer.status)}
+                </span>
                 <Button asChild size="sm" variant="outline"><Link to="/dashboard/messages" search={{ c: offer.conversationId }}><MessageCircle /> Open chat</Link></Button>
-                {canOwnerCancel(offer.status) ? (
+                {role === "buyer" && canBuyerCheckout(offer.status) && (
+                  <Button asChild size="sm" variant="ocean"><Link to="/checkout" search={{ offer: offer.id }}>Review checkout</Link></Button>
+                )}
+                {role === "seller" && canOwnerCancel(offer.status) && (
                   <Button size="sm" variant="outline" disabled={cancel.isPending} onClick={() => setToCancel(offer)}>Cancel price</Button>
-                ) : (
+                )}
+                {offer.status === "paid" && (
                   <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><ShieldCheck className="h-4 w-4 text-ocean" /> Paid, can't be cancelled</span>
                 )}
               </div>
@@ -162,7 +227,7 @@ function OwnerOffersPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Cancel this price?</AlertDialogTitle>
             <AlertDialogDescription>
-              {toCancel ? `${toCancel.buyerName} will no longer be able to pay ${formatPrice(toCancel.amount, toCancel.currency)} per day for ${toCancel.boatTitle}. You can send a new price afterwards.` : ""}
+              {toCancel ? `${toCancel.otherName} will no longer be able to pay ${formatMoney(toCancel.amount, toCancel.currency)} per day for ${toCancel.boatTitle}. You can send a new price afterwards.` : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
