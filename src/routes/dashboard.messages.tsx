@@ -2,21 +2,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { ArrowLeft, ArrowUp, Anchor, Check, LoaderCircle, MessageCircle, Search, ShieldCheck, X } from "lucide-react";
+import { ArrowLeft, ArrowUp, Anchor, LoaderCircle, MessageCircle, Search, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { containsContactInfo } from "@/lib/contact-redaction";
 import { initials } from "@/lib/format";
+import { OfferPanel } from "@/components/offers/OfferPanel";
 
 type Conversation = Tables<"conversations">;
 type Message = Tables<"messages">;
-type PriceOffer = Tables<"price_offers">;
 type ReopenRequest = Tables<"conversation_reopen_requests">;
 type ConversationPreview = Conversation & {
   boat: Pick<Tables<"boats">, "id" | "title" | "city" | "country" | "daily_price" | "currency" | "price_negotiable"> | null;
@@ -40,7 +39,6 @@ function MessagesPage() {
   const queryClient = useQueryClient();
   const { c: requestedId } = Route.useSearch();
   const [draft, setDraft] = useState("");
-  const [offerAmount, setOfferAmount] = useState("");
   const [closedConversationId, setClosedConversationId] = useState<string | null>(null);
   const [reopenExplanation, setReopenExplanation] = useState("");
   const messageListRef = useRef<HTMLDivElement>(null);
@@ -119,18 +117,6 @@ function MessagesPage() {
     },
   });
   const messages = messagesQuery.data ?? [];
-  const offersQuery = useQuery({
-    queryKey: ["price-offers", activeId ?? "none"],
-    enabled: !!user && !!activeId,
-    refetchInterval: 3000,
-    queryFn: async (): Promise<PriceOffer[]> => {
-      const { data, error } = await supabase.from("price_offers").select("*").eq("conversation_id", activeId!).order("created_at", { ascending: true }).limit(100);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-  const priceOffers = offersQuery.data ?? [];
-  const pendingOffer = [...priceOffers].reverse().find((offer) => offer.status === "pending") ?? null;
   const conversationClosed = !!activeConversation?.closed_at || closedConversationId === activeId;
   const reopenQuery = useQuery({
     queryKey: ["conversation-reopen-requests", activeId ?? "none"],
@@ -218,41 +204,8 @@ function MessagesPage() {
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : "Couldn't send this message."),
   });
 
-  const submitOffer = useMutation({
-    mutationFn: async ({ counterOfferId }: { counterOfferId?: string } = {}) => {
-      if (!user || !activeId || !activeConversation?.boat?.price_negotiable) throw new Error("Price negotiation is not available for this listing.");
-      if (conversationClosed) throw new Error("This conversation has been closed.");
-      const amount = Number(offerAmount);
-      if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a valid daily price offer.");
-      if (counterOfferId) {
-        const { error } = await supabase.from("price_offers").update({ status: "countered" }).eq("id", counterOfferId).eq("status", "pending");
-        if (error) throw error;
-      }
-      const { error } = await supabase.from("price_offers").insert({ conversation_id: activeId, sender_id: user.id, amount });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      setOfferAmount("");
-      if (activeId) void queryClient.invalidateQueries({ queryKey: ["price-offers", activeId] });
-    },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : "Couldn't submit this offer."),
-  });
-
-  const respondToOffer = useMutation({
-    mutationFn: async ({ offerId, status }: { offerId: string; status: "accepted" | "declined" }) => {
-      if (conversationClosed) throw new Error("This conversation has been closed.");
-      const { error } = await supabase.from("price_offers").update({ status }).eq("id", offerId).eq("status", "pending");
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      if (activeId) void queryClient.invalidateQueries({ queryKey: ["price-offers", activeId] });
-    },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : "Couldn't respond to this offer."),
-  });
-
   const selectConversation = (conversationId: string) => {
     setDraft("");
-    setOfferAmount("");
     void navigate({ to: "/dashboard/messages", search: { c: conversationId }, replace: true });
   };
 
@@ -383,26 +336,8 @@ function MessagesPage() {
                     </div>
                   )}
                 </div>
-                {activeConversation.boat?.price_negotiable && (
-                  <div className="border-t border-ocean/20 bg-card p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div><p className="text-sm font-semibold">Negotiable daily price</p><p className="text-xs text-muted-foreground">Listed at {formatPrice(activeConversation.boat.daily_price, activeConversation.boat.currency)} per day</p></div>
-                      <span className="rounded-full bg-ocean-soft px-3 py-1 text-xs font-semibold text-ocean">Negotiable</span>
-                    </div>
-                    {offersQuery.isError && <p className="mt-2 text-xs text-destructive">Price offers could not be loaded.</p>}
-                    <div className="mt-3 max-h-40 space-y-2 overflow-y-auto">
-                      {priceOffers.map((offer) => {
-                        const ownOffer = offer.sender_id === user.id;
-                        const statusLabel = offer.status === "pending" ? "Awaiting response" : offer.status === "accepted" ? "Accepted" : offer.status === "declined" ? "Declined" : "Countered";
-                        return <div key={offer.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border px-3 py-2"><div><p className="text-sm font-semibold">{ownOffer ? "Your offer" : "Their offer"}: {formatPrice(Number(offer.amount), activeConversation.boat?.currency ?? "EUR")} / day</p><p className="text-xs text-muted-foreground">{statusLabel} · {format(parseISO(offer.created_at), "d MMM, HH:mm")}</p></div>{!conversationClosed && offer.status === "pending" && !ownOffer && <div className="flex gap-2"><Button type="button" size="sm" variant="ocean" disabled={respondToOffer.isPending} onClick={() => respondToOffer.mutate({ offerId: offer.id, status: "accepted" })}><Check /> Accept</Button><Button type="button" size="sm" variant="outline" disabled={respondToOffer.isPending} onClick={() => respondToOffer.mutate({ offerId: offer.id, status: "declined" })}><X /> Decline</Button></div>}</div>;
-                      })}
-                    </div>
-                    {!conversationClosed && !priceOffers.some((offer) => offer.status === "accepted") && (pendingOffer?.sender_id === user.id ? <p className="mt-3 text-xs text-muted-foreground">Your offer is waiting for the other person to respond.</p> : <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); if (offerAmount) submitOffer.mutate(pendingOffer ? { counterOfferId: pendingOffer.id } : {}); }}><div className="min-w-40 flex-1 space-y-1.5"><label htmlFor="offerAmount" className="text-xs font-medium">{pendingOffer ? "Counter offer per day" : "Your offer per day"}</label><Input id="offerAmount" type="number" min="0.01" step="0.01" required value={offerAmount} onChange={(event) => setOfferAmount(event.currentTarget.value)} placeholder={String(activeConversation.boat.daily_price)} disabled={submitOffer.isPending} /></div><Button type="submit" variant="ocean" disabled={!offerAmount || submitOffer.isPending || respondToOffer.isPending}>{submitOffer.isPending ? <LoaderCircle className="animate-spin" /> : null}{pendingOffer ? "Counter offer" : "Send offer"}</Button></form>)}
-                    {priceOffers.some((offer) => offer.status === "accepted") && (() => {
-                      const acceptedOffer = priceOffers.find((offer) => offer.status === "accepted")!;
-                      return <div className="mt-3 space-y-2"><p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">Price agreed at {formatPrice(Number(acceptedOffer.amount), activeConversation.boat?.currency ?? "EUR")} per day.</p>{user.id === activeConversation.sailor_id && <Button asChild size="sm" variant="ocean"><Link to="/checkout" search={{ offer: acceptedOffer.id }}>Review checkout</Link></Button>}</div>;
-                    })()}
-                  </div>
+                {activeConversation.boat && (
+                  <OfferPanel conversationId={activeConversation.id} ownerId={activeConversation.owner_id} boat={activeConversation.boat} closed={conversationClosed} />
                 )}
 
                 {conversationClosed ? (
@@ -466,10 +401,6 @@ function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void
       <Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>Try again</Button>
     </div>
   );
-}
-
-function formatPrice(amount: number, currency: string) {
-  return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "EUR" }).format(amount);
 }
 
 

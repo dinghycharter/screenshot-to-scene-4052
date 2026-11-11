@@ -27,7 +27,8 @@ function CheckoutPreviewPage() {
     queryFn: async () => {
       const { data: offer, error: offerError } = await supabase.from("price_offers").select("id, conversation_id, sender_id, amount, status").eq("id", offerId!).maybeSingle();
       if (offerError) throw offerError;
-      if (!offer || offer.status !== "accepted") throw new Error("This price has not been accepted or is no longer available.");
+      if (offer?.status === "cancelled") throw new Error("The owner cancelled this price, so it can no longer be paid. Message the owner to agree a new price.");
+      if (!offer || (offer.status !== "accepted" && offer.status !== "paid")) throw new Error("This price has not been accepted or is no longer available.");
 
       const { data: conversation, error: conversationError } = await supabase.from("conversations").select("id, boat_id, owner_id, sailor_id").eq("id", offer.conversation_id).maybeSingle();
       if (conversationError) throw conversationError;
@@ -45,6 +46,7 @@ function CheckoutPreviewPage() {
   const rentalSubtotal = record && days > 0 ? Math.round(Number(record.offer.amount) * days * 100) / 100 : 0;
   const fees = useMemo(() => calculatePlatformFees(rentalSubtotal), [rentalSubtotal]);
   const currency = record?.boat.currency ?? "EUR";
+  const isPaid = record?.offer.status === "paid";
   const total = fees.buyerTotal + (record ? Number(record.boat.security_deposit) : 0);
 
   return (
@@ -79,8 +81,8 @@ function CheckoutPreviewPage() {
               <div className="flex justify-between border-t border-border pt-4 text-base font-semibold"><span>Total to pay</span><span>{formatPrice(total, currency)}</span></div>
             </div>
             <p className="mt-4 text-xs text-muted-foreground">The buyer fee applies to the rental subtotal, not the refundable deposit.</p>
-            <Button variant="ocean" size="lg" className="mt-6 w-full" disabled><CreditCard className="h-4 w-4" /> Continue to secure payment</Button>
-            <p className="mt-3 text-center text-xs text-muted-foreground">Payment processing is not connected yet. This preview will not charge you.</p>
+            <Button variant="ocean" size="lg" className="mt-6 w-full" disabled><CreditCard className="h-4 w-4" /> {isPaid ? "Paid" : "Continue to secure payment"}</Button>
+            <p className="mt-3 text-center text-xs text-muted-foreground">{isPaid ? "This charter has been paid and can no longer be cancelled." : "Payment processing is not connected yet. This preview will not charge you."}</p>
             <div className="mt-5 flex items-start gap-2 border-t border-border pt-4 text-xs text-muted-foreground"><ShieldCheck className="h-4 w-4 shrink-0 text-ocean" />The owner receives the rental amount minus the 3% seller fee: {formatPrice(fees.sellerPayout, currency)} estimated for these dates, before payment processing costs.</div>
           </> : <p className="mt-3 text-sm text-muted-foreground">The breakdown will appear after an accepted offer loads.</p>}
         </aside>
