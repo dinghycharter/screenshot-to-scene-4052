@@ -467,25 +467,31 @@ export type Database = {
           amount: number
           conversation_id: string
           created_at: string
+          end_date: string | null
           id: string
           sender_id: string
-          status: "pending" | "accepted" | "declined" | "countered"
+          start_date: string | null
+          status: "pending" | "accepted" | "declined" | "countered" | "cancelled" | "paid"
         }
         Insert: {
           amount: number
           conversation_id: string
           created_at?: string
+          end_date?: string | null
           id?: string
           sender_id: string
-          status?: "pending" | "accepted" | "declined" | "countered"
+          start_date?: string | null
+          status?: "pending" | "accepted" | "declined" | "countered" | "cancelled" | "paid"
         }
         Update: {
           amount?: number
           conversation_id?: string
           created_at?: string
+          end_date?: string | null
           id?: string
           sender_id?: string
-          status?: "pending" | "accepted" | "declined" | "countered"
+          start_date?: string | null
+          status?: "pending" | "accepted" | "declined" | "countered" | "cancelled" | "paid"
         }
         Relationships: []
       }

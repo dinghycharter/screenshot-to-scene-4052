@@ -2,21 +2,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { ArrowLeft, ArrowUp, Anchor, Check, LoaderCircle, MessageCircle, Search, ShieldCheck, X } from "lucide-react";
+import { ArrowLeft, ArrowUp, Anchor, CalendarDays, ChevronDown, LoaderCircle, MessageCircle, Search, ShieldCheck, X } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { containsContactInfo } from "@/lib/contact-redaction";
 import { initials } from "@/lib/format";
+import { OfferPanel } from "@/components/offers/OfferPanel";
 
 type Conversation = Tables<"conversations">;
 type Message = Tables<"messages">;
-type PriceOffer = Tables<"price_offers">;
 type ReopenRequest = Tables<"conversation_reopen_requests">;
 type ConversationPreview = Conversation & {
   boat: Pick<Tables<"boats">, "id" | "title" | "city" | "country" | "daily_price" | "currency" | "price_negotiable"> | null;
@@ -40,9 +39,10 @@ function MessagesPage() {
   const queryClient = useQueryClient();
   const { c: requestedId } = Route.useSearch();
   const [draft, setDraft] = useState("");
-  const [offerAmount, setOfferAmount] = useState("");
   const [closedConversationId, setClosedConversationId] = useState<string | null>(null);
   const [reopenExplanation, setReopenExplanation] = useState("");
+  const [dealOpen, setDealOpen] = useState(false);
+  const [noticeHidden, setNoticeHidden] = useState(false);
   const messageListRef = useRef<HTMLDivElement>(null);
 
   const inboxQuery = useQuery({
@@ -119,18 +119,6 @@ function MessagesPage() {
     },
   });
   const messages = messagesQuery.data ?? [];
-  const offersQuery = useQuery({
-    queryKey: ["price-offers", activeId ?? "none"],
-    enabled: !!user && !!activeId,
-    refetchInterval: 3000,
-    queryFn: async (): Promise<PriceOffer[]> => {
-      const { data, error } = await supabase.from("price_offers").select("*").eq("conversation_id", activeId!).order("created_at", { ascending: true }).limit(100);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-  const priceOffers = offersQuery.data ?? [];
-  const pendingOffer = [...priceOffers].reverse().find((offer) => offer.status === "pending") ?? null;
   const conversationClosed = !!activeConversation?.closed_at || closedConversationId === activeId;
   const reopenQuery = useQuery({
     queryKey: ["conversation-reopen-requests", activeId ?? "none"],
@@ -218,41 +206,8 @@ function MessagesPage() {
     onError: (error: unknown) => toast.error(error instanceof Error ? error.message : "Couldn't send this message."),
   });
 
-  const submitOffer = useMutation({
-    mutationFn: async ({ counterOfferId }: { counterOfferId?: string } = {}) => {
-      if (!user || !activeId || !activeConversation?.boat?.price_negotiable) throw new Error("Price negotiation is not available for this listing.");
-      if (conversationClosed) throw new Error("This conversation has been closed.");
-      const amount = Number(offerAmount);
-      if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a valid daily price offer.");
-      if (counterOfferId) {
-        const { error } = await supabase.from("price_offers").update({ status: "countered" }).eq("id", counterOfferId).eq("status", "pending");
-        if (error) throw error;
-      }
-      const { error } = await supabase.from("price_offers").insert({ conversation_id: activeId, sender_id: user.id, amount });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      setOfferAmount("");
-      if (activeId) void queryClient.invalidateQueries({ queryKey: ["price-offers", activeId] });
-    },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : "Couldn't submit this offer."),
-  });
-
-  const respondToOffer = useMutation({
-    mutationFn: async ({ offerId, status }: { offerId: string; status: "accepted" | "declined" }) => {
-      if (conversationClosed) throw new Error("This conversation has been closed.");
-      const { error } = await supabase.from("price_offers").update({ status }).eq("id", offerId).eq("status", "pending");
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      if (activeId) void queryClient.invalidateQueries({ queryKey: ["price-offers", activeId] });
-    },
-    onError: (error: unknown) => toast.error(error instanceof Error ? error.message : "Couldn't respond to this offer."),
-  });
-
   const selectConversation = (conversationId: string) => {
     setDraft("");
-    setOfferAmount("");
     void navigate({ to: "/dashboard/messages", search: { c: conversationId }, replace: true });
   };
 
@@ -289,8 +244,8 @@ function MessagesPage() {
       {inboxQuery.isError ? (
         <ErrorPanel message="We couldn't load your conversations. Check your connection and try again." onRetry={() => void inboxQuery.refetch()} />
       ) : (
-        <div className="grid min-h-[65vh] overflow-hidden rounded-2xl border border-border bg-card shadow-soft md:grid-cols-[310px_minmax(0,1fr)]">
-          <aside className="flex max-h-[35vh] flex-col border-b border-border md:max-h-[72vh] md:border-b-0 md:border-r">
+        <div className="grid h-[78vh] min-h-[560px] overflow-hidden rounded-2xl border border-border bg-card shadow-soft md:grid-cols-[280px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)_360px]">
+          <aside className={`${requestedId ? "hidden" : "flex"} min-h-0 flex-col md:flex md:border-r md:border-border`}>
             <div className="border-b border-border px-5 py-4">
               <h2 className="font-semibold">Inbox</h2>
               <p className="mt-1 text-xs text-muted-foreground">Booking questions and owner replies</p>
@@ -335,10 +290,13 @@ function MessagesPage() {
             </div>
           </aside>
 
-          <section className="flex min-h-[50vh] flex-col md:min-h-0 md:max-h-[72vh]">
+          <section className={`${requestedId ? "flex" : "hidden"} min-h-0 flex-col md:flex`}>
             {activeConversation ? (
               <>
-                <header className="flex items-center gap-3 border-b border-border px-4 py-3 md:px-6">
+                <header className="flex items-center gap-3 border-b border-border px-4 py-3 md:px-5">
+                  <Button type="button" variant="ghost" size="icon" className="-ml-2 h-9 w-9 shrink-0 md:hidden" aria-label="Back to inbox" onClick={() => void navigate({ to: "/dashboard/messages", search: { c: undefined }, replace: true })}>
+                    <ArrowLeft />
+                  </Button>
                   <Avatar className="h-10 w-10">
                     <AvatarImage src={activeConversation.otherPerson?.avatar_url ?? undefined} alt={activeConversation.otherPerson?.full_name ?? ""} />
                     <AvatarFallback className="bg-navy text-xs font-semibold text-navy-foreground">{initials(activeConversation.otherPerson?.full_name ?? "")}</AvatarFallback>
@@ -347,16 +305,29 @@ function MessagesPage() {
                     <h2 className="truncate font-semibold">{activeConversation.otherPerson?.full_name || "DinghyCharter member"}</h2>
                     <Link to="/boats/$boatId" params={{ boatId: activeConversation.boat_id }} className="flex items-center gap-1 truncate text-xs text-muted-foreground hover:text-ocean">
                       <Anchor className="h-3 w-3 shrink-0" /> {activeConversation.boat?.title ?? "View boat listing"}
+                      {activeConversation.boat?.city ? <span> · {activeConversation.boat.city}</span> : null}
                     </Link>
                   </div>
-                  <span className="hidden rounded-full bg-ocean-soft px-2.5 py-1 text-xs font-medium text-ocean sm:inline">{activeConversation.boat?.city}</span>
+                  <Button type="button" variant={dealOpen ? "ocean" : "outline"} size="sm" className="shrink-0 lg:hidden" aria-expanded={dealOpen} onClick={() => setDealOpen((open) => !open)}>
+                    <CalendarDays /> Dates & price <ChevronDown className={`transition-transform ${dealOpen ? "rotate-180" : ""}`} />
+                  </Button>
                 </header>
 
-                <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-950 md:px-6">
-                  Keep all booking messages and payments on DinghyCharter. Do not share phone numbers or email addresses. Sharing contact details automatically closes the conversation; repeated attempts may lead to account suspension.
-                </div>
+                {dealOpen && activeConversation.boat && (
+                  <div className="max-h-[55%] overflow-y-auto border-b border-border bg-card lg:hidden">
+                    <OfferPanel conversationId={activeConversation.id} ownerId={activeConversation.owner_id} boat={activeConversation.boat} closed={conversationClosed} />
+                  </div>
+                )}
 
-                <div ref={messageListRef} className="flex-1 space-y-4 overflow-y-auto bg-surface/40 px-4 py-5 md:px-6">
+                {!noticeHidden && (
+                  <div className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[11px] leading-snug text-amber-950 md:px-5">
+                    <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <p className="flex-1">Keep messages and payments on DinghyCharter. Sharing phone numbers or emails closes the conversation automatically.</p>
+                    <button type="button" className="shrink-0 rounded p-0.5 hover:bg-amber-100" aria-label="Hide notice" onClick={() => setNoticeHidden(true)}><X className="h-3.5 w-3.5" /></button>
+                  </div>
+                )}
+
+                <div ref={messageListRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-surface/40 px-4 py-5 md:px-5">
                   {messagesQuery.isError ? (
                     <ErrorPanel message="Messages couldn't be loaded." onRetry={() => void messagesQuery.refetch()} />
                   ) : messagesQuery.isLoading ? (
@@ -383,30 +354,8 @@ function MessagesPage() {
                     </div>
                   )}
                 </div>
-                {activeConversation.boat?.price_negotiable && (
-                  <div className="border-t border-ocean/20 bg-card p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div><p className="text-sm font-semibold">Negotiable daily price</p><p className="text-xs text-muted-foreground">Listed at {formatPrice(activeConversation.boat.daily_price, activeConversation.boat.currency)} per day</p></div>
-                      <span className="rounded-full bg-ocean-soft px-3 py-1 text-xs font-semibold text-ocean">Negotiable</span>
-                    </div>
-                    {offersQuery.isError && <p className="mt-2 text-xs text-destructive">Price offers could not be loaded.</p>}
-                    <div className="mt-3 max-h-40 space-y-2 overflow-y-auto">
-                      {priceOffers.map((offer) => {
-                        const ownOffer = offer.sender_id === user.id;
-                        const statusLabel = offer.status === "pending" ? "Awaiting response" : offer.status === "accepted" ? "Accepted" : offer.status === "declined" ? "Declined" : "Countered";
-                        return <div key={offer.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border px-3 py-2"><div><p className="text-sm font-semibold">{ownOffer ? "Your offer" : "Their offer"}: {formatPrice(Number(offer.amount), activeConversation.boat?.currency ?? "EUR")} / day</p><p className="text-xs text-muted-foreground">{statusLabel} · {format(parseISO(offer.created_at), "d MMM, HH:mm")}</p></div>{!conversationClosed && offer.status === "pending" && !ownOffer && <div className="flex gap-2"><Button type="button" size="sm" variant="ocean" disabled={respondToOffer.isPending} onClick={() => respondToOffer.mutate({ offerId: offer.id, status: "accepted" })}><Check /> Accept</Button><Button type="button" size="sm" variant="outline" disabled={respondToOffer.isPending} onClick={() => respondToOffer.mutate({ offerId: offer.id, status: "declined" })}><X /> Decline</Button></div>}</div>;
-                      })}
-                    </div>
-                    {!conversationClosed && !priceOffers.some((offer) => offer.status === "accepted") && (pendingOffer?.sender_id === user.id ? <p className="mt-3 text-xs text-muted-foreground">Your offer is waiting for the other person to respond.</p> : <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); if (offerAmount) submitOffer.mutate(pendingOffer ? { counterOfferId: pendingOffer.id } : {}); }}><div className="min-w-40 flex-1 space-y-1.5"><label htmlFor="offerAmount" className="text-xs font-medium">{pendingOffer ? "Counter offer per day" : "Your offer per day"}</label><Input id="offerAmount" type="number" min="0.01" step="0.01" required value={offerAmount} onChange={(event) => setOfferAmount(event.currentTarget.value)} placeholder={String(activeConversation.boat.daily_price)} disabled={submitOffer.isPending} /></div><Button type="submit" variant="ocean" disabled={!offerAmount || submitOffer.isPending || respondToOffer.isPending}>{submitOffer.isPending ? <LoaderCircle className="animate-spin" /> : null}{pendingOffer ? "Counter offer" : "Send offer"}</Button></form>)}
-                    {priceOffers.some((offer) => offer.status === "accepted") && (() => {
-                      const acceptedOffer = priceOffers.find((offer) => offer.status === "accepted")!;
-                      return <div className="mt-3 space-y-2"><p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">Price agreed at {formatPrice(Number(acceptedOffer.amount), activeConversation.boat?.currency ?? "EUR")} per day.</p>{user.id === activeConversation.sailor_id && <Button asChild size="sm" variant="ocean"><Link to="/checkout" search={{ offer: acceptedOffer.id }}>Review checkout</Link></Button>}</div>;
-                    })()}
-                  </div>
-                )}
-
                 {conversationClosed ? (
-                  <div className="space-y-3 border-t border-border bg-secondary/40 p-4 md:px-6">
+                  <div className="space-y-3 border-t border-border bg-secondary/40 p-4 md:px-5">
                     <p className="text-sm font-medium">This conversation is temporarily closed after contact details were detected.</p>
                     {activeConversation.close_reason === "contact_sharing" && (myPendingReopenRequest ? (
                       <p className="rounded-lg bg-background p-3 text-sm text-muted-foreground">Your explanation has been sent. An admin will review the sanitized message and both participants’ explanations.</p>
@@ -420,7 +369,7 @@ function MessagesPage() {
                     {reopenRequests.some((request) => request.status === "denied") && <p className="text-xs text-muted-foreground">A previous request was declined. You can submit a new explanation for review.</p>}
                   </div>
                 ) : <form
-                  className="border-t border-border bg-card p-4 md:px-6"
+                  className="border-t border-border bg-card p-3 md:px-5"
                   onSubmit={(event) => {
                     event.preventDefault();
                     if (draft.trim()) sendMessage.mutate();
@@ -432,8 +381,8 @@ function MessagesPage() {
                       onChange={(event) => setDraft(event.target.value)}
                       placeholder="Write a message…"
                       maxLength={2000}
-                      rows={2}
-                      className="min-h-[48px] max-h-36 resize-y rounded-xl bg-background"
+                      rows={1}
+                      className="min-h-[44px] max-h-32 resize-none rounded-xl bg-background"
                       aria-label="Message"
                       disabled={sendMessage.isPending}
                     />
@@ -453,6 +402,12 @@ function MessagesPage() {
               </div>
             )}
           </section>
+
+          {activeConversation?.boat && (
+            <aside className="hidden min-h-0 overflow-y-auto border-l border-border bg-card lg:block">
+              <OfferPanel conversationId={activeConversation.id} ownerId={activeConversation.owner_id} boat={activeConversation.boat} closed={conversationClosed} />
+            </aside>
+          )}
         </div>
       )}
     </div>
@@ -466,10 +421,6 @@ function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void
       <Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>Try again</Button>
     </div>
   );
-}
-
-function formatPrice(amount: number, currency: string) {
-  return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "EUR" }).format(amount);
 }
 
 

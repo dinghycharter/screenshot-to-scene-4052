@@ -17,6 +17,7 @@ import { Route as SearchRouteImport } from './routes/search'
 import { Route as AdminCatalogRouteImport } from './routes/admin.catalog'
 import { Route as AdminModerationRouteImport } from './routes/admin.moderation'
 import { Route as BoatsBoatIdRouteImport } from './routes/boats.$boatId'
+import { Route as DashboardOffersRouteImport } from './routes/dashboard.offers'
 import { Route as DashboardMessagesRouteImport } from './routes/dashboard.messages'
 import { Route as DashboardBoatsNewRouteImport } from './routes/dashboard.boats.new'
 
@@ -60,6 +61,11 @@ const BoatsBoatIdRoute = BoatsBoatIdRouteImport.update({
   path: '/boats/$boatId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardOffersRoute = DashboardOffersRouteImport.update({
+  id: '/dashboard/offers',
+  path: '/dashboard/offers',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardMessagesRoute = DashboardMessagesRouteImport.update({
   id: '/dashboard/messages',
   path: '/dashboard/messages',
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/admin/moderation': typeof AdminModerationRoute
   '/boats/$boatId': typeof BoatsBoatIdRoute
   '/dashboard/messages': typeof DashboardMessagesRoute
+  '/dashboard/offers': typeof DashboardOffersRoute
   '/dashboard/boats/new': typeof DashboardBoatsNewRoute
 }
 export interface FileRoutesByTo {
@@ -92,6 +99,7 @@ export interface FileRoutesByTo {
   '/admin/catalog': typeof AdminCatalogRoute
   '/boats/$boatId': typeof BoatsBoatIdRoute
   '/dashboard/messages': typeof DashboardMessagesRoute
+  '/dashboard/offers': typeof DashboardOffersRoute
   '/dashboard/boats/new': typeof DashboardBoatsNewRoute
 }
 export interface FileRoutesById {
@@ -104,6 +112,7 @@ export interface FileRoutesById {
   '/admin/catalog': typeof AdminCatalogRoute
   '/boats/$boatId': typeof BoatsBoatIdRoute
   '/dashboard/messages': typeof DashboardMessagesRoute
+  '/dashboard/offers': typeof DashboardOffersRoute
   '/dashboard/boats/new': typeof DashboardBoatsNewRoute
 }
 export interface FileRouteTypes {
@@ -118,6 +127,7 @@ export interface FileRouteTypes {
     | '/admin/moderation'
     | '/boats/$boatId'
     | '/dashboard/messages'
+    | '/dashboard/offers'
     | '/dashboard/boats/new'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -129,6 +139,7 @@ export interface FileRouteTypes {
     | '/admin/catalog'
     | '/boats/$boatId'
     | '/dashboard/messages'
+    | '/dashboard/offers'
     | '/dashboard/boats/new'
   id:
     | '__root__'
@@ -140,6 +151,7 @@ export interface FileRouteTypes {
     | '/admin/catalog'
     | '/boats/$boatId'
     | '/dashboard/messages'
+    | '/dashboard/offers'
     | '/dashboard/boats/new'
   fileRoutesById: FileRoutesById
 }
@@ -153,6 +165,7 @@ export interface RootRouteChildren {
   AdminModerationRoute: typeof AdminModerationRoute
   BoatsBoatIdRoute: typeof BoatsBoatIdRoute
   DashboardMessagesRoute: typeof DashboardMessagesRoute
+  DashboardOffersRoute: typeof DashboardOffersRoute
   DashboardBoatsNewRoute: typeof DashboardBoatsNewRoute
 }
 
@@ -214,6 +227,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BoatsBoatIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/offers': {
+      id: '/dashboard/offers'
+      path: '/dashboard/offers'
+      fullPath: '/dashboard/offers'
+      preLoaderRoute: typeof DashboardOffersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/messages': {
       id: '/dashboard/messages'
       path: '/dashboard/messages'
@@ -241,6 +261,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminModerationRoute: AdminModerationRoute,
   BoatsBoatIdRoute: BoatsBoatIdRoute,
   DashboardMessagesRoute: DashboardMessagesRoute,
+  DashboardOffersRoute: DashboardOffersRoute,
   DashboardBoatsNewRoute: DashboardBoatsNewRoute,
 }
 export const routeTree = rootRouteImport
