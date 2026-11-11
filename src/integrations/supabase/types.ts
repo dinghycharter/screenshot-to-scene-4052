@@ -462,6 +462,111 @@ export type Database = {
           },
         ]
       }
+      payments: {
+        Row: {
+          buyer_fee_cents: number
+          buyer_id: string
+          buyer_total_cents: number
+          conversation_id: string
+          created_at: string
+          currency: string
+          end_date: string
+          id: string
+          offer_id: string
+          paid_at: string | null
+          refunded_at: string | null
+          rental_cents: number
+          seller_fee_cents: number
+          seller_id: string
+          seller_payout_cents: number
+          start_date: string
+          status: "pending" | "paid" | "transferred" | "refunded" | "expired"
+          stripe_charge_id: string | null
+          stripe_payment_intent_id: string | null
+          stripe_session_id: string | null
+          stripe_transfer_id: string | null
+          transferred_at: string | null
+        }
+        Insert: {
+          buyer_fee_cents: number
+          buyer_id: string
+          buyer_total_cents: number
+          conversation_id: string
+          created_at?: string
+          currency: string
+          end_date: string
+          id?: string
+          offer_id: string
+          paid_at?: string | null
+          refunded_at?: string | null
+          rental_cents: number
+          seller_fee_cents: number
+          seller_id: string
+          seller_payout_cents: number
+          start_date: string
+          status?: "pending" | "paid" | "transferred" | "refunded" | "expired"
+          stripe_charge_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_session_id?: string | null
+          stripe_transfer_id?: string | null
+          transferred_at?: string | null
+        }
+        Update: {
+          buyer_fee_cents?: number
+          buyer_id?: string
+          buyer_total_cents?: number
+          conversation_id?: string
+          created_at?: string
+          currency?: string
+          end_date?: string
+          id?: string
+          offer_id?: string
+          paid_at?: string | null
+          refunded_at?: string | null
+          rental_cents?: number
+          seller_fee_cents?: number
+          seller_id?: string
+          seller_payout_cents?: number
+          start_date?: string
+          status?: "pending" | "paid" | "transferred" | "refunded" | "expired"
+          stripe_charge_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_session_id?: string | null
+          stripe_transfer_id?: string | null
+          transferred_at?: string | null
+        }
+        Relationships: []
+      }
+      seller_payout_accounts: {
+        Row: {
+          charges_enabled: boolean
+          created_at: string
+          details_submitted: boolean
+          payouts_enabled: boolean
+          stripe_account_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          charges_enabled?: boolean
+          created_at?: string
+          details_submitted?: boolean
+          payouts_enabled?: boolean
+          stripe_account_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          charges_enabled?: boolean
+          created_at?: string
+          details_submitted?: boolean
+          payouts_enabled?: boolean
+          stripe_account_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       price_offers: {
         Row: {
           amount: number

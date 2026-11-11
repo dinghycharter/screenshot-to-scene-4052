@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { CalendarDays, LoaderCircle, MessageCircle, ShieldCheck } from "lucide-react";
+import { CalendarDays, CircleCheck, Landmark, LoaderCircle, MessageCircle, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDateRange } from "@/lib/format";
+import { getPayoutStatus, startPayoutOnboarding } from "@/lib/payments.functions";
 import { canBuyerCheckout, canOwnerCancel, formatMoney, offerStatusLabel, offerTotals } from "@/lib/offers";
 
 export const Route = createFileRoute("/dashboard/offers")({
@@ -113,6 +114,20 @@ function OffersPage() {
     },
   });
 
+  const payoutQuery = useQuery({
+    queryKey: ["payout-status", user?.id ?? "signed-out"],
+    enabled: !!user,
+    queryFn: async () => getPayoutStatus(),
+  });
+  const connect = useMutation({
+    mutationFn: async () => startPayoutOnboarding(),
+    onSuccess: (result) => {
+      if (result.ok) window.location.assign(result.url);
+      else toast.error(result.error);
+    },
+    onError: () => toast.error("Couldn't start the payout setup. Try again in a moment."),
+  });
+
   const cancel = useMutation({
     mutationFn: async (offerId: string) => {
       const { data, error } = await supabase.from("price_offers").update({ status: "cancelled" }).eq("id", offerId).in("status", ["pending", "accepted"]).select("id");
@@ -157,6 +172,30 @@ function OffersPage() {
           ? "Prices you or buyers have proposed on your boats, with their dates. You can cancel a price at any time until the buyer pays. After payment nothing can be cancelled."
           : "Offers on boats you want to charter. When the owner agrees a price you can go to checkout from here."}
       </p>
+
+      {role === "seller" && payoutQuery.data?.ok && payoutQuery.data.configured && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4 shadow-card">
+          <div className="flex items-start gap-3">
+            <Landmark className="mt-0.5 h-5 w-5 shrink-0 text-ocean" />
+            <div>
+              <p className="font-semibold">Payouts</p>
+              <p className="text-sm text-muted-foreground">
+                {payoutQuery.data.chargesEnabled
+                  ? "Your Stripe account is ready. You are paid once the charter starts, minus the 3% DinghyCharter fee."
+                  : "Connect your Stripe account so buyers can pay you. It takes a few minutes and Stripe verifies your identity."}
+              </p>
+            </div>
+          </div>
+          {payoutQuery.data.chargesEnabled ? (
+            <span className="flex items-center gap-1.5 text-sm font-medium text-emerald-800"><CircleCheck className="h-4 w-4" /> Ready</span>
+          ) : (
+            <Button variant="ocean" size="sm" disabled={connect.isPending} onClick={() => connect.mutate()}>
+              {connect.isPending ? <LoaderCircle className="animate-spin" /> : null}
+              {payoutQuery.data.connected ? "Finish payout setup" : "Set up payouts"}
+            </Button>
+          )}
+        </div>
+      )}
 
       {showTabs && (
         <div className="mt-6 inline-flex rounded-full border border-border bg-secondary/50 p-1 text-sm font-medium" role="tablist">

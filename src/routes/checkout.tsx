@@ -1,23 +1,26 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, CalendarDays, CreditCard, ShieldCheck } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { ArrowLeft, CalendarDays, CreditCard, LoaderCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { calculatePlatformFees } from "@/lib/platform-fees";
 import { countCharterDays } from "@/lib/booking";
 import { formatPrice } from "@/lib/format";
+import { confirmCheckout, createCheckout } from "@/lib/payments.functions";
 
 export const Route = createFileRoute("/checkout")({
-  validateSearch: (search: Record<string, unknown>) => ({ offer: typeof search.offer === "string" ? search.offer : undefined }),
+  validateSearch: (search: Record<string, unknown>) => ({ offer: typeof search.offer === "string" ? search.offer : undefined, session_id: typeof search.session_id === "string" ? search.session_id : undefined }),
   head: () => ({ meta: [{ title: "Review your charter — DinghyCharter" }, { name: "robots", content: "noindex" }] }),
   component: CheckoutPreviewPage,
 });
 
 function CheckoutPreviewPage() {
   const { user, loading } = useAuth();
-  const { offer: offerId } = Route.useSearch();
+  const { offer: offerId, session_id: sessionId } = Route.useSearch();
+  const queryClient = useQueryClient();
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
@@ -41,6 +44,30 @@ function CheckoutPreviewPage() {
     },
   });
 
+  // Back from Stripe: confirm the payment right away instead of waiting for the webhook.
+  const confirm = useMutation({
+    mutationFn: async (id: string) => confirmCheckout({ data: { sessionId: id } }),
+    onSuccess: (result) => {
+      if (result.ok && result.outcome === "paid") toast.success("Payment received. Your charter is confirmed.");
+      else if (result.ok && result.outcome === "refunded") toast.error("The owner cancelled this price while you were paying. Your payment was refunded automatically.");
+      else if (!result.ok) toast.error(result.error);
+      void queryClient.invalidateQueries({ queryKey: ["checkout-preview"] });
+    },
+  });
+  useEffect(() => {
+    if (sessionId && user && !confirm.isPending && !confirm.isSuccess) confirm.mutate(sessionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, user?.id]);
+
+  const pay = useMutation({
+    mutationFn: async () => createCheckout({ data: { offerId: offerId! } }),
+    onSuccess: (result) => {
+      if (result.ok) window.location.assign(result.url);
+      else toast.error(result.error);
+    },
+    onError: () => toast.error("Couldn't start the payment. Try again in a moment."),
+  });
+
   const record = checkoutQuery.data;
   const agreedDates = record?.offer.start_date && record.offer.end_date ? { start: record.offer.start_date, end: record.offer.end_date } : null;
   const effectiveStart = agreedDates?.start ?? startDate;
@@ -50,7 +77,8 @@ function CheckoutPreviewPage() {
   const fees = useMemo(() => calculatePlatformFees(rentalSubtotal), [rentalSubtotal]);
   const currency = record?.boat.currency ?? "EUR";
   const isPaid = record?.offer.status === "paid";
-  const total = fees.buyerTotal + (record ? Number(record.boat.security_deposit) : 0);
+  const deposit = record ? Number(record.boat.security_deposit) : 0;
+  const total = fees.buyerTotal;
 
   return (
     <main className="container-page min-h-[70vh] py-10 sm:py-14">
@@ -84,12 +112,14 @@ function CheckoutPreviewPage() {
             <div className="mt-5 space-y-3 text-sm">
               <div className="flex justify-between gap-4"><span className="text-muted-foreground">{formatPrice(Number(record.offer.amount), currency)} × {days || "—"} {days === 1 ? "day" : "days"}</span><span>{formatPrice(rentalSubtotal, currency)}</span></div>
               <div className="flex justify-between gap-4"><span className="text-muted-foreground">DinghyCharter buyer fee (3%)</span><span>{formatPrice(fees.buyerFee, currency)}</span></div>
-              <div className="flex justify-between gap-4"><span className="text-muted-foreground">Refundable security deposit</span><span>{formatPrice(Number(record.boat.security_deposit), currency)}</span></div>
+              
               <div className="flex justify-between border-t border-border pt-4 text-base font-semibold"><span>Total to pay</span><span>{formatPrice(total, currency)}</span></div>
             </div>
-            <p className="mt-4 text-xs text-muted-foreground">The buyer fee applies to the rental subtotal, not the refundable deposit.</p>
-            <Button variant="ocean" size="lg" className="mt-6 w-full" disabled><CreditCard className="h-4 w-4" /> {isPaid ? "Paid" : "Continue to secure payment"}</Button>
-            <p className="mt-3 text-center text-xs text-muted-foreground">{isPaid ? "This charter has been paid and can no longer be cancelled." : "Payment processing is not connected yet. This preview will not charge you."}</p>
+            <p className="mt-4 text-xs text-muted-foreground">The buyer fee applies to the rental subtotal.{deposit > 0 ? ` The ${formatPrice(deposit, currency)} security deposit is not charged here. Agree it with the owner.` : ""}</p>
+            <Button variant="ocean" size="lg" className="mt-6 w-full" disabled={isPaid || pay.isPending || confirm.isPending || days < 1} onClick={() => pay.mutate()}>
+              {pay.isPending || confirm.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />} {isPaid ? "Paid" : "Continue to secure payment"}
+            </Button>
+            <p className="mt-3 text-center text-xs text-muted-foreground">{isPaid ? "This charter has been paid and can no longer be cancelled." : "You pay securely with Stripe. After payment nothing can be cancelled. The owner is paid once your charter starts."}</p>
             <div className="mt-5 flex items-start gap-2 border-t border-border pt-4 text-xs text-muted-foreground"><ShieldCheck className="h-4 w-4 shrink-0 text-ocean" />The owner receives the rental amount minus the 3% seller fee: {formatPrice(fees.sellerPayout, currency)} estimated for these dates, before payment processing costs.</div>
           </> : <p className="mt-3 text-sm text-muted-foreground">The breakdown will appear after an accepted offer loads.</p>}
         </aside>

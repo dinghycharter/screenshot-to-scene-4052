@@ -22,6 +22,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { isRangeBookable, type Range } from "@/lib/availability";
 import { formatDateRange } from "@/lib/format";
+import { getPayoutStatus } from "@/lib/payments.functions";
 import { canBuyerCheckout, canOwnerCancel, formatMoney, hasPaidOffer, hasSettledOffer, offerStatusLabel, offerTotals } from "@/lib/offers";
 
 type PriceOffer = Tables<"price_offers">;
@@ -94,6 +95,14 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
   });
   const availability = datesQuery.data?.availability ?? [];
   const booked = datesQuery.data?.booked ?? [];
+
+  const payoutQuery = useQuery({
+    queryKey: ["payout-status", user?.id ?? "signed-out"],
+    enabled: !!user && isOwner,
+    staleTime: 60_000,
+    queryFn: async () => getPayoutStatus(),
+  });
+  const payoutsMissing = isOwner && payoutQuery.data?.ok === true && payoutQuery.data.configured && !payoutQuery.data.chargesEnabled;
 
   const offers = offersQuery.data ?? [];
   const pendingOffer = [...offers].reverse().find((offer) => offer.status === "pending") ?? null;
@@ -312,6 +321,11 @@ export function OfferPanel({ conversationId, ownerId, boat, closed }: Props) {
             {acceptedOffer.start_date && acceptedOffer.end_date ? ` for ${formatDateRange(acceptedOffer.start_date, acceptedOffer.end_date)}` : ""}.
             {isOwner ? " The buyer can pay at any time. You can cancel until they pay." : ""}
           </p>
+          {payoutsMissing && (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+              The buyer can't pay until you connect your payout account. <Link to="/dashboard/offers" className="underline">Set up payouts</Link>
+            </p>
+          )}
           {!isOwner && canBuyerCheckout(acceptedOffer.status) && (
             <Button asChild size="sm" variant="ocean" className="w-full">
               <Link to="/checkout" search={{ offer: acceptedOffer.id }}>Review checkout</Link>
