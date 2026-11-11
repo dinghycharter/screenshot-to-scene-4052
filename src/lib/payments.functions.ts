@@ -23,35 +23,28 @@ async function appOrigin(): Promise<string> {
 export const getPayoutStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<PaymentResult<{ configured: boolean; connected: boolean; chargesEnabled: boolean; payoutsEnabled: boolean; detailsSubmitted: boolean }>> => {
-    const { isStripeConfigured, stripeRequest } = await import("@/lib/stripe.server");
+    const { isStripeConfigured } = await import("@/lib/stripe.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { syncPayoutAccount } = await import("@/lib/payments.server");
+    const { refreshPayoutAccount } = await import("@/lib/payments.server");
     const empty = { ok: true as const, configured: false, connected: false, chargesEnabled: false, payoutsEnabled: false, detailsSubmitted: false };
     if (!isStripeConfigured()) return empty;
     try {
       const { data: row } = await supabaseAdmin.from("seller_payout_accounts").select("*").eq("user_id", context.userId).maybeSingle();
       if (!row) return { ...empty, configured: true };
-      const account = await stripeRequest("GET", `/accounts/${row.stripe_account_id}`);
-      await syncPayoutAccount(account);
-      return {
-        ok: true,
-        configured: true,
-        connected: true,
-        chargesEnabled: !!account["charges_enabled"],
-        payoutsEnabled: !!account["payouts_enabled"],
-        detailsSubmitted: !!account["details_submitted"],
-      };
+      const status = await refreshPayoutAccount(context.userId, row.stripe_account_id);
+      return { ok: true, configured: true, connected: true, ...status };
     } catch (cause) {
       console.error("[payments] getPayoutStatus", cause);
       return { ok: false, code: "error", error: "Couldn't check your payout account." };
     }
   });
 
-/** Creates the seller's own (Standard) Stripe account if needed and returns the onboarding link. */
+/** Creates the seller's own Stripe account (Accounts v2, full dashboard) if needed and returns the onboarding link. */
 export const startPayoutOnboarding = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<PaymentResult<{ url: string }>> => {
-    const { isStripeConfigured, stripeRequest } = await import("@/lib/stripe.server");
+  .inputValidator((input: { country?: string } | undefined) => z.object({ country: z.string().length(2).optional() }).parse(input ?? {}))
+  .handler(async ({ data, context }): Promise<PaymentResult<{ url: string }>> => {
+    const { isStripeConfigured, stripeRequestV2 } = await import("@/lib/stripe.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     if (!isStripeConfigured()) return NOT_CONFIGURED;
     try {
@@ -59,22 +52,37 @@ export const startPayoutOnboarding = createServerFn({ method: "POST" })
       let accountId = existing?.stripe_account_id;
       if (!accountId) {
         const email = typeof context.claims["email"] === "string" ? context.claims["email"] : undefined;
-        const account = await stripeRequest(
+        const account = await stripeRequestV2(
           "POST",
-          "/accounts",
-          { type: "standard", email, metadata: { user_id: context.userId } },
-          { idempotencyKey: `acct_${context.userId}` },
+          "/core/accounts",
+          {
+            contact_email: email,
+            dashboard: "full",
+            identity: { country: (data.country ?? "pt").toLowerCase() },
+            configuration: { merchant: { capabilities: { card_payments: { requested: true } } } },
+            defaults: { responsibilities: { fees_collector: "stripe", losses_collector: "stripe" } },
+            metadata: { user_id: context.userId },
+            include: ["configuration.merchant", "identity", "defaults"],
+          },
+          { idempotencyKey: `acct_v2_${context.userId}` },
         );
         accountId = account["id"] as string;
         const { error } = await supabaseAdmin.from("seller_payout_accounts").insert({ user_id: context.userId, stripe_account_id: accountId });
         if (error) throw error;
       }
+      // Stripe only accepts HTTPS return URLs, even in test mode. On localhost, send the seller back to the live site.
       const origin = await appOrigin();
-      const link = await stripeRequest("POST", "/account_links", {
+      const base = origin.startsWith("https://") ? origin : "https://www.dinghycharter.com";
+      const link = await stripeRequestV2("POST", "/core/account_links", {
         account: accountId,
-        type: "account_onboarding",
-        refresh_url: `${origin}/dashboard/offers?payouts=refresh`,
-        return_url: `${origin}/dashboard/offers?payouts=return`,
+        use_case: {
+          type: "account_onboarding",
+          account_onboarding: {
+            configurations: ["merchant"],
+            refresh_url: `${base}/dashboard/offers?payouts=refresh`,
+            return_url: `${base}/dashboard/offers?payouts=return`,
+          },
+        },
       });
       return { ok: true, url: link["url"] as string };
     } catch (cause) {
@@ -106,7 +114,13 @@ export const createCheckout = createServerFn({ method: "POST" })
       if (!boat) return { ok: false, code: "invalid", error: "This boat listing is no longer available." };
 
       const { data: seller } = await supabaseAdmin.from("seller_payout_accounts").select("stripe_account_id, charges_enabled").eq("user_id", conversation.owner_id).maybeSingle();
-      if (!seller?.stripe_account_id || !seller.charges_enabled) {
+      let sellerReady = !!seller?.charges_enabled;
+      if (seller?.stripe_account_id && !sellerReady) {
+        // The seller may have finished onboarding since we last looked.
+        const { refreshPayoutAccount } = await import("@/lib/payments.server");
+        sellerReady = (await refreshPayoutAccount(conversation.owner_id, seller.stripe_account_id)).chargesEnabled;
+      }
+      if (!seller?.stripe_account_id || !sellerReady) {
         return { ok: false, code: "seller_not_ready", error: "The owner hasn't finished setting up payouts yet. Ask them to connect their payout account." };
       }
 

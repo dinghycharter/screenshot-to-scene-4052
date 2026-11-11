@@ -20,9 +20,6 @@ export const Route = createFileRoute("/api/stripe/webhook")({
           if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
             const { finalizeCheckoutSession } = await import("@/lib/payments.server");
             await finalizeCheckoutSession(String(event.data.object["id"]));
-          } else if (event.type === "account.updated") {
-            const { syncPayoutAccount } = await import("@/lib/payments.server");
-            await syncPayoutAccount(event.data.object);
           }
         } catch (cause) {
           console.error("[stripe webhook]", event.type, cause);

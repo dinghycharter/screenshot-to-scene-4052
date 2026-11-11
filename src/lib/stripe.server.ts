@@ -88,3 +88,28 @@ export function verifyStripeSignature(rawBody: string, header: string | null, se
     return candidate.length === expectedBuffer.length && timingSafeEqual(candidate, expectedBuffer);
   });
 }
+
+// Accounts v2 (connected accounts) uses JSON bodies and an explicit API version.
+const STRIPE_V2_VERSION = "2026-10-28.endive";
+
+export async function stripeRequestV2(
+  method: "GET" | "POST",
+  path: string,
+  body?: Record<string, unknown>,
+  options: { idempotencyKey?: string } = {},
+): Promise<StripeObject> {
+  const secretKey = process.env["STRIPE_SECRET_KEY"];
+  if (!secretKey) throw new StripeNotConfiguredError();
+
+  const headers: Record<string, string> = { Authorization: `Bearer ${secretKey}`, "Stripe-Version": STRIPE_V2_VERSION };
+  if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
+  if (body) headers["Content-Type"] = "application/json";
+
+  const response = await fetch(`https://api.stripe.com/v2${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  const json = (await response.json().catch(() => ({}))) as StripeObject;
+  if (!response.ok) {
+    const error = json["error"] ?? {};
+    throw new StripeApiError(error.message ?? `Stripe request failed (${response.status})`, response.status, error.code);
+  }
+  return json;
+}

@@ -28,6 +28,12 @@ export const Route = createFileRoute("/dashboard/offers")({
 
 type Role = "buyer" | "seller";
 
+const PAYOUT_COUNTRIES: [string, string][] = [
+  ["PT", "Portugal"], ["ES", "Spain"], ["FR", "France"], ["DE", "Germany"], ["IT", "Italy"], ["NL", "Netherlands"], ["BE", "Belgium"],
+  ["IE", "Ireland"], ["AT", "Austria"], ["DK", "Denmark"], ["SE", "Sweden"], ["FI", "Finland"], ["NO", "Norway"], ["CH", "Switzerland"],
+  ["GB", "United Kingdom"], ["US", "United States"],
+];
+
 type DashboardOffer = {
   id: string;
   role: Role;
@@ -119,8 +125,9 @@ function OffersPage() {
     enabled: !!user,
     queryFn: async () => getPayoutStatus(),
   });
+  const [country, setCountry] = useState("PT");
   const connect = useMutation({
-    mutationFn: async () => startPayoutOnboarding(),
+    mutationFn: async () => startPayoutOnboarding({ data: { country } }),
     onSuccess: (result) => {
       if (result.ok) window.location.assign(result.url);
       else toast.error(result.error);
@@ -189,10 +196,17 @@ function OffersPage() {
           {payoutQuery.data.chargesEnabled ? (
             <span className="flex items-center gap-1.5 text-sm font-medium text-emerald-800"><CircleCheck className="h-4 w-4" /> Ready</span>
           ) : (
-            <Button variant="ocean" size="sm" disabled={connect.isPending} onClick={() => connect.mutate()}>
-              {connect.isPending ? <LoaderCircle className="animate-spin" /> : null}
-              {payoutQuery.data.connected ? "Finish payout setup" : "Set up payouts"}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {!payoutQuery.data.connected && (
+                <select aria-label="Country of your Stripe account" value={country} onChange={(event) => setCountry(event.target.value)} className="h-9 rounded-lg border border-input bg-background px-2 text-sm">
+                  {PAYOUT_COUNTRIES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+                </select>
+              )}
+              <Button variant="ocean" size="sm" disabled={connect.isPending} onClick={() => connect.mutate()}>
+                {connect.isPending ? <LoaderCircle className="animate-spin" /> : null}
+                {payoutQuery.data.connected ? "Finish payout setup" : "Set up payouts"}
+              </Button>
+            </div>
           )}
         </div>
       )}
